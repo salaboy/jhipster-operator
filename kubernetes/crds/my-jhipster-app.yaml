@@ -1,0 +1,7 @@
+apiVersion: "alpha.k8s.jhipster.tech/v1"
+kind: Application
+metadata:
+  name: my-jhipster-app
+spec:
+  version: "1.0"
+  selector: "my-jhipster-app"

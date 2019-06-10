@@ -1,0 +1,10 @@
+apiVersion: "alpha.k8s.jhipster.tech/v1"
+kind: Module
+metadata:
+  name: review
+  labels: 
+     app: my-jhipster-app
+spec:
+  serviceName: "review"
+  serviceVersion: "1.0"
+  

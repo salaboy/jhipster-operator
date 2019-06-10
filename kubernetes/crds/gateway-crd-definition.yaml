@@ -1,0 +1,23 @@
+apiVersion: apiextensions.k8s.io/v1beta1 
+kind: CustomResourceDefinition
+metadata:
+  name: gateways.alpha.k8s.jhipster.tech
+spec:
+  group: alpha.k8s.jhipster.tech
+  version: v1 
+  scope: Namespaced 
+  names:
+    plural: gateways
+    singular: gateway
+    kind: Gateway
+    shortNames:
+    - g
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            serviceName:
+              type: string
+          required:
+            - serviceName

@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jhipster-operator
+  labels:
+    app: jhipster-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jhipster-operator
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+      labels:
+        app: jhipster-operator
+    spec:
+      containers:
+      - name: jhipster-operator
+        image: salaboy/jhipster-operator:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+      serviceAccountName: jhipster-operator
