@@ -5,15 +5,13 @@ metadata:
 spec:
   group: alpha.k8s.jhipster.tech
   version: v1 
-  scope: Namespaced 
-  subresources:
-    status: {}
+  scope: Namespaced
   names:
     plural: applications 
     singular: application
     kind: Application 
     shortNames:
-    - apps
+    - jh
   additionalPrinterColumns:
     - name: STATUS
       type: string

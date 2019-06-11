@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.util.List;
 
 @Service
@@ -26,6 +27,11 @@ public class K8SCoreRuntime {
     private IstioClient istioClient;
 
     private String externalIP = "N/A";
+
+    @PostConstruct
+    public void init() {
+        logger.error(">>> Namespace: " + kubernetesClient.getNamespace());
+    }
 
     public void registerCustomKind(String apiVersion, String kind, Class<? extends KubernetesResource> clazz) {
         KubernetesDeserializer.registerCustomKind(apiVersion, kind, clazz);
