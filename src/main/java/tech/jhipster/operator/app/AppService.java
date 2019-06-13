@@ -9,6 +9,8 @@ import tech.jhipster.operator.crds.app.Application;
 import tech.jhipster.operator.crds.app.ApplicationSpec;
 import tech.jhipster.operator.crds.app.CustomService;
 import tech.jhipster.operator.crds.app.ModuleDescr;
+import tech.jhipster.operator.crds.gateway.Gateway;
+import tech.jhipster.operator.crds.registry.Registry;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,8 +57,48 @@ public class AppService {
         return false;
     }
 
-    public void addServiceToApp(CustomService service) {
-        String appName = service.getMetadata().getLabels().get("app");
+    public void addGatewayToApp(Gateway gateway) {
+        String appName = gateway.getMetadata().getLabels().get("app");
+        if (appName != null && !appName.isEmpty()) {
+            Application application = apps.get(appName);
+            if (application != null) {
+                ApplicationSpec spec = application.getSpec();
+                if (k8SCoreRuntime.isServiceAvailable(gateway.getSpec().getServiceName())) {
+                    spec.setGateway(gateway.getSpec().getServiceName());
+                    application.setSpec(spec);
+                    apps.put(application.getMetadata().getName(), application);
+                    logger.info("> Application: " + appName + " updated with Registry " + gateway.getMetadata().getName());
+                } else {
+                    logger.error("Registry: " + gateway.getSpec().getServiceName() + " doesn't exist. ");
+                }
+            }
+        } else {
+            logger.error("> Orphan Service: " + gateway.getMetadata().getName());
+        }
+    }
+
+    public void addRegistryToApp(Registry registry) {
+        String appName = registry.getMetadata().getLabels().get("app");
+        if (appName != null && !appName.isEmpty()) {
+            Application application = apps.get(appName);
+            if (application != null) {
+                ApplicationSpec spec = application.getSpec();
+                if (k8SCoreRuntime.isServiceAvailable(registry.getSpec().getServiceName())) {
+                    spec.setRegistry(registry.getSpec().getServiceName());
+                    application.setSpec(spec);
+                    apps.put(application.getMetadata().getName(), application);
+                    logger.info("> Application: " + appName + " updated with Registry " + registry.getMetadata().getName());
+                } else {
+                    logger.error("Registry: " + registry.getSpec().getServiceName() + " doesn't exist. ");
+                }
+            }
+        } else {
+            logger.error("> Orphan Service: " + registry.getMetadata().getName());
+        }
+    }
+
+    public void addModuleToApp(CustomService module) {
+        String appName = module.getMetadata().getLabels().get("app");
         if (appName != null && !appName.isEmpty()) {
             Application application = apps.get(appName);
             if (application != null) {
@@ -65,18 +107,47 @@ public class AppService {
                 if (modules == null) {
                     modules = new HashSet<>();
                 }
-                if (k8SCoreRuntime.isServiceAvailable(service.getSpec().getServiceName())) {
-                    modules.add(new ModuleDescr(service.getMetadata().getName(), service.getKind(), service.getSpec().getServiceName()));
+                if (k8SCoreRuntime.isServiceAvailable(module.getSpec().getServiceName())) {
+                    modules.add(new ModuleDescr(module.getMetadata().getName(), module.getKind(), module.getSpec().getServiceName()));
                     spec.setModules(modules);
                     application.setSpec(spec);
                     apps.put(application.getMetadata().getName(), application);
-                    logger.info("> Application: " + appName + " updated with Service " + service.getMetadata().getName());
+                    logger.info("> Application: " + appName + " updated with Service " + module.getMetadata().getName());
                 } else {
-                    logger.error("Service: " + service.getSpec().getServiceName() + " doesn't exist. ");
+                    logger.error("Service: " + module.getSpec().getServiceName() + " doesn't exist. ");
                 }
             }
         } else {
-            logger.error("> Orphan Service: " + service.getMetadata().getName());
+            logger.error("> Orphan Service: " + module.getMetadata().getName());
+        }
+    }
+
+    public void removeGatewayFromApp(Gateway gateway) {
+        String appName = gateway.getMetadata().getLabels().get("app");
+        if (appName != null && !appName.isEmpty()) {
+            Application application = apps.get(appName);
+            if (application != null) {
+                ApplicationSpec spec = application.getSpec();
+                spec.setGateway("");
+                application.setSpec(spec);
+                apps.put(application.getMetadata().getName(), application);
+                logger.info(">> Gateway removed " + gateway.getMetadata().getName() + " from app " + appName);
+            }
+        }
+    }
+
+
+    public void removeRegistryFromApp(Registry service) {
+        String appName = service.getMetadata().getLabels().get("app");
+        if (appName != null && !appName.isEmpty()) {
+            Application application = apps.get(appName);
+            if (application != null) {
+                ApplicationSpec spec = application.getSpec();
+                spec.setRegistry("");
+                application.setSpec(spec);
+                apps.put(application.getMetadata().getName(), application);
+                logger.info(">> Registry removed " + service.getMetadata().getName() + " from app " + appName);
+            }
         }
     }
 

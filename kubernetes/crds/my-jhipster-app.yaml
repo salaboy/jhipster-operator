@@ -5,3 +5,5 @@ metadata:
 spec:
   version: "1.0"
   selector: "my-jhipster-app"
+  gateway: ""
+  registry: ""

@@ -187,7 +187,7 @@ public class AppsOperator {
             modulesResourceVersion = moduleList.get(0).getMetadata().getResourceVersion();
             logger.info(">> Module Resource Version: " + modulesResourceVersion);
             moduleList.forEach(module -> {
-                appService.addServiceToApp(module);
+                appService.addModuleToApp(module);
             });
         }
         // Load Existing Gateways
@@ -196,7 +196,7 @@ public class AppsOperator {
             gatewaysResourceVersion = gatewayList.get(0).getMetadata().getResourceVersion();
             logger.info(">> Gateway Resource Version: " + gatewaysResourceVersion);
             gatewayList.forEach(gateway -> {
-                appService.addServiceToApp(gateway);
+                appService.addModuleToApp(gateway);
             });
 
         }
@@ -206,7 +206,7 @@ public class AppsOperator {
             registriesResourceVersion = registriesList.get(0).getMetadata().getResourceVersion();
             logger.info(">> Registry Resource Version: " + registriesResourceVersion);
             registriesList.forEach(registry -> {
-                appService.addServiceToApp(registry);
+                appService.addModuleToApp(registry);
             });
 
         }
@@ -239,19 +239,19 @@ public class AppsOperator {
                     List<Module> moduleForAppList = modulesCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
                     if (moduleForAppList != null && !moduleForAppList.isEmpty()) {
                         moduleForAppList.forEach(module -> {
-                            appService.addServiceToApp(module);
+                            appService.addModuleToApp(module);
                         });
                     }
                     List<Gateway> gatewayForAppList = gatewaysCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
                     if (gatewayForAppList != null && !gatewayForAppList.isEmpty()) {
                         gatewayForAppList.forEach(gateway -> {
-                            appService.addServiceToApp(gateway);
+                            appService.addModuleToApp(gateway);
                         });
                     }
                     List<Registry> registryForAppList = registriesCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
                     if (registryForAppList != null && !registryForAppList.isEmpty()) {
                         registryForAppList.forEach(registry -> {
-                            appService.addServiceToApp(registry);
+                            appService.addModuleToApp(registry);
                         });
                     }
                 }
@@ -285,7 +285,7 @@ public class AppsOperator {
             @Override
             public void eventReceived(Watcher.Action action, Module module) {
                 if (action.equals(Action.ADDED)) {
-                    appService.addServiceToApp(module);
+                    appService.addModuleToApp(module);
                 }
                 if (action.equals(Action.DELETED)) {
                     appService.removeServiceFromApp(module);
@@ -312,11 +312,11 @@ public class AppsOperator {
             @Override
             public void eventReceived(Watcher.Action action, Registry registry) {
                 if (action.equals(Action.ADDED)) {
-                    appService.addServiceToApp(registry);
+                    appService.addRegistryToApp(registry);
 
                 }
                 if (action.equals(Action.DELETED)) {
-                    appService.removeServiceFromApp(registry);
+                    appService.removeRegistryFromApp(registry);
 
                 }
                 if (registry.getSpec() == null) {
@@ -337,11 +337,11 @@ public class AppsOperator {
             @Override
             public void eventReceived(Watcher.Action action, Gateway gateway) {
                 if (action.equals(Action.ADDED)) {
-                    appService.addServiceToApp(gateway);
+                    appService.addGatewayToApp(gateway);
 
                 }
                 if (action.equals(Action.DELETED)) {
-                    appService.removeServiceFromApp(gateway);
+                    appService.removeGatewayFromApp(gateway);
 
                 }
                 if (gateway.getSpec() == null) {
@@ -368,6 +368,7 @@ public class AppsOperator {
         appService.getAppsMap().keySet().forEach(appName ->
                 {
                     Application app = appService.getApp(appName);
+                    app.getMetadata().setNamespace("jhipster");
                     logger.info("> Scanning App: " + appName + "...");
                     if (appService.isAppHealthy(app)) {
                         logger.info("> App Name: " + appName + " is up and running");
@@ -389,7 +390,7 @@ public class AppsOperator {
                         app.getSpec().setUrl("N/A");
                         logger.info("> App: " + appName + ", status: UNHEALTHY. \n ");
                     }
-
+                    logger.error(">>> App Before upsert: " + app.toString());
                     appCRDClient.createOrReplace(app);
                 }
         );

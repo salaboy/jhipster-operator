@@ -26,6 +26,7 @@ public class Application extends CustomResource {
     @Override
     public String toString() {
         return "Application{" +
+                super.toString() +
                 "spec=" + spec +
                 '}';
     }
