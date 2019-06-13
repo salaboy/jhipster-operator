@@ -1,0 +1,75 @@
+application {
+  config {
+    baseName gateway,
+    applicationType gateway,
+    packageName com.salaboy.gateway,
+    serviceDiscoveryType eureka,
+    authenticationType jwt,
+    prodDatabaseType mysql,
+    cacheProvider hazelcast,
+    buildTool maven,
+    clientFramework react,
+    useSass true,
+    testFrameworks [protractor]
+  }
+  entities *
+}
+application {
+  config {
+    baseName invoice,
+    applicationType microservice,
+    packageName com.salaboy.invoice,
+    serviceDiscoveryType eureka,
+    authenticationType jwt,
+    prodDatabaseType mysql,
+    buildTool maven,
+    serverPort 8081,
+    skipUserManagement true
+  }
+  entities Invoice, Shipment
+}
+
+application {
+  config {
+    baseName review,
+    applicationType microservice,
+    packageName com.salaboy.review,
+    serviceDiscoveryType eureka,
+    authenticationType jwt,
+    prodDatabaseType mysql,
+    buildTool maven,
+    serverPort 8081,
+    skipUserManagement true
+  }
+  entities *
+}
+
+/* Entities for Invoice microservice */
+entity Invoice {
+    code String required
+    date Instant required
+    details String
+    status InvoiceStatus required
+    paymentMethod PaymentMethod required
+    paymentDate Instant required
+    paymentAmount BigDecimal required
+}
+enum InvoiceStatus {
+    PAID, ISSUED, CANCELLED
+}
+entity Shipment {
+    trackingCode String
+    date Instant required
+    details String
+}
+enum PaymentMethod {
+    CREDIT_CARD, CASH_ON_DELIVERY, PAYPAL
+}
+relationship OneToMany {
+    Invoice{shipment} to Shipment{invoice(code) required}
+}
+
+dto * with mapstruct
+service Invoice, Shipment with serviceClass
+paginate Invoice, Shipment with pagination
+microservice Invoice, Shipment with invoice
