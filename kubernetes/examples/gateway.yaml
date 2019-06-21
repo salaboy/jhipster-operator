@@ -1,0 +1,10 @@
+apiVersion: "alpha.k8s.jhipster.tech/v1"
+kind: Gateway
+metadata:
+  name: gateway
+  labels: 
+     app: my-jhipster-app
+spec:
+  serviceName: "gateway"
+  serviceVersion: "1.0"
+  

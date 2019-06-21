@@ -10,15 +10,15 @@ import java.util.Objects;
         using = JsonDeserializer.None.class
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class ModuleDescr {
+public class MicroServiceDescr {
     private String name;
     private String kind;
     private String serviceName;
 
-    public ModuleDescr() {
+    public MicroServiceDescr() {
     }
 
-    public ModuleDescr(String name, String kind, String serviceName) {
+    public MicroServiceDescr(String name, String kind, String serviceName) {
         this.name = name;
         this.kind = kind;
         this.serviceName = serviceName;
@@ -50,7 +50,7 @@ public class ModuleDescr {
 
     @Override
     public String toString() {
-        return "ModuleDescr{" +
+        return "MicroServiceDescr{" +
                 "name='" + name + '\'' +
                 ", kind='" + kind + '\'' +
                 ", serviceName='" + serviceName + '\'' +
@@ -66,7 +66,7 @@ public class ModuleDescr {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ModuleDescr that = (ModuleDescr) o;
+        MicroServiceDescr that = (MicroServiceDescr) o;
         return Objects.equals(name, that.name) &&
                 Objects.equals(kind, that.kind) &&
                 Objects.equals(serviceName, that.serviceName);

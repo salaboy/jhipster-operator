@@ -30,7 +30,11 @@ public class K8SCoreRuntime {
 
     @PostConstruct
     public void init() {
-        logger.error(">>> Namespace: " + kubernetesClient.getNamespace());
+        logger.error(">>> Current Namespace: " + kubernetesClient.getNamespace());
+    }
+
+    public String getNamespace() {
+        return kubernetesClient.getNamespace();
     }
 
     public void registerCustomKind(String apiVersion, String kind, Class<? extends KubernetesResource> clazz) {
@@ -38,7 +42,7 @@ public class K8SCoreRuntime {
     }
 
     public boolean isServiceAvailable(String serviceName) {
-        //@TODO: i should check that the k8s deployment exist before adding the module
+        //@TODO: i should check that the k8s deployment exist before adding the microservice
         //@TODO: i should update the k8s deployment to make sure that services are configured for the app
         io.fabric8.kubernetes.api.model.Service service = kubernetesClient.services().withName(serviceName).get();
         if (service != null) {
@@ -58,21 +62,62 @@ public class K8SCoreRuntime {
         return kubernetesClient.customResources(crd, resourceType, listClass, doneClass);
     }
 
-    public String findGatewayExternalIP() {
+    public String findExternalIP() {
         if (externalIP.equals("N/A")) {
-            ServiceList list = kubernetesClient.services().inNamespace("istio-system").list();
-            for (io.fabric8.kubernetes.api.model.Service s : list.getItems()) {
-                if (s.getMetadata().getName().equals("istio-ingressgateway")) {
-                    List<LoadBalancerIngress> ingress = s.getStatus().getLoadBalancer().getIngress();
-                    if (ingress.size() == 1) {
-                        externalIP = ingress.get(0).getIp();
-                    }
-                } else {
-                    logger.error(">> Trying to resolve External IP from istio-ingressgateway failed. There will be no external IP for your apps.");
-                }
-            }
+            externalIP = tryIstioGatewayApproach();
+        }
+        if (externalIP.equals("N/A")) {
+            externalIP = tryLoadBalancerApproach();
         }
         return externalIP;
+    }
+
+    private String tryLoadBalancerApproach() {
+        String loadBalancerIP = "N/A";
+        ServiceList list = kubernetesClient.services().inNamespace(getNamespace()).list();
+        for (io.fabric8.kubernetes.api.model.Service s : list.getItems()) {
+            if (s.getMetadata().getName().equals("gateway")) {
+                if (s.getSpec().getType().equals("LoadBalancer")) {
+                    if (!s.getSpec().getExternalIPs().isEmpty()) {
+                        loadBalancerIP = s.getSpec().getExternalIPs().get(0);
+                    } else {
+                        logger.error(">> LoadBalancer type service is being used, but there is no External IP available, " +
+                                "you need to use port-forward:  'kubectl port-forward svc/jhipster-operator 8081:80 -n jhipster' " +
+                                "and then access using http://localhost:8081/apps/");
+                        loadBalancerIP = "localhost:8081";
+                    }
+                }
+                if (s.getSpec().getType().equals("NodePort")) {
+                    logger.error(">> NodePort type service is being used, you need to use port-forward:  'kubectl port-forward svc/jhipster-operator 8080:80 " +
+                            "-n jhipster' and then access using http://localhost:8081/apps/");
+                    loadBalancerIP = "localhost:8081";
+                }
+
+            } else {
+                logger.error(">> Trying to resolve External IP from LoadBalancer service \"jhipster-operator\" failed. There will be no external IP for your apps.");
+                logger.error(">> Trying to use port-forward:  'kubectl port-forward svc/jhipster-operator 8081:80 " +
+                        "-n jhipster' and then access using http://localhost:8081/apps/");
+            }
+        }
+        return loadBalancerIP;
+    }
+
+    private String tryIstioGatewayApproach() {
+        String istioIP = "N/A";
+        ServiceList list = kubernetesClient.services().inNamespace("istio-system").list();
+        for (io.fabric8.kubernetes.api.model.Service s : list.getItems()) {
+            if (s.getMetadata().getName().equals("istio-ingressgateway")) {
+                List<LoadBalancerIngress> ingress = s.getStatus().getLoadBalancer().getIngress();
+                if (ingress.size() == 1) {
+                    istioIP = ingress.get(0).getIp();
+                }
+            } else {
+                logger.error(">> Trying to resolve External IP from istio-ingressgateway failed. There will be no external IP for your apps.");
+                logger.error(">> Trying to use port-forward:  'kubectl port-forward svc/jhipster-operator 8081:80 " +
+                        "-n jhipster' and then access using http://localhost:8081/apps/");
+            }
+        }
+        return istioIP;
     }
 
 }

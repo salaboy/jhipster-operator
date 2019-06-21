@@ -18,8 +18,8 @@ spec:
     spec:
       containers:
       - name: jhipster-operator
-        image: salaboy/jhipster-operator:latest
-        imagePullPolicy: Always
+        image: jhipster-operator
+        imagePullPolicy: Never
         ports:
         - containerPort: 8080
       serviceAccountName: jhipster-operator

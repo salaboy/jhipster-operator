@@ -24,7 +24,7 @@ public class Registry extends CustomResource implements CustomService {
     }
 
     public String getKind() {
-        return "Gateway";
+        return "Registry";
     }
 
     @Override

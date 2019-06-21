@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import io.fabric8.kubernetes.client.CustomResource;
 
+import java.util.Objects;
+
 @JsonDeserialize(
         using = JsonDeserializer.None.class
 )
@@ -29,5 +31,18 @@ public class Application extends CustomResource {
                 super.toString() +
                 "spec=" + spec +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Application)) return false;
+        Application that = (Application) o;
+        return spec.equals(that.spec);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(spec);
     }
 }

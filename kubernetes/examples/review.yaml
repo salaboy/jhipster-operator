@@ -1,5 +1,5 @@
 apiVersion: "alpha.k8s.jhipster.tech/v1"
-kind: Module
+kind: MicroService
 metadata:
   name: review
   labels: 

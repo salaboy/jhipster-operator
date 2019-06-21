@@ -1,17 +1,17 @@
 apiVersion: apiextensions.k8s.io/v1beta1 
 kind: CustomResourceDefinition
 metadata:
-  name: modules.alpha.k8s.jhipster.tech
+  name: microservices.alpha.k8s.jhipster.tech
 spec:
   group: alpha.k8s.jhipster.tech
   version: v1 
   scope: Namespaced 
   names:
-    plural: modules
-    singular: module
-    kind: Module
+    plural: microservices
+    singular: microservice
+    kind: MicroService
     shortNames:
-    - m
+    - ms
   validation:
     openAPIV3Schema:
       properties:

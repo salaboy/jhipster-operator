@@ -8,9 +8,12 @@ import tech.jhipster.operator.core.K8SCoreRuntime;
 import tech.jhipster.operator.crds.app.Application;
 import tech.jhipster.operator.crds.app.ApplicationSpec;
 import tech.jhipster.operator.crds.app.CustomService;
-import tech.jhipster.operator.crds.app.ModuleDescr;
+import tech.jhipster.operator.crds.app.MicroServiceDescr;
 import tech.jhipster.operator.crds.gateway.Gateway;
 import tech.jhipster.operator.crds.registry.Registry;
+import tech.jhipster.operator.jdl.JDLParser;
+import tech.jhipster.operator.jdl.JHipsterApplicationDefinition;
+import tech.jhipster.operator.jdl.JHipsterModuleDefinition;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,31 +32,67 @@ public class AppService {
      * Add the logic to define what are the rules for your application to be UP or DOWN
      */
     public boolean isAppHealthy(Application app) {
-        //@TODO:  Compare modules against app.jdl modules
-        Set<ModuleDescr> modules = app.getSpec().getModules();
-        boolean moduleMissing = true;
-        if (modules != null) {
-            moduleMissing = modules.stream().filter(m -> m.getKind().equals("Module")).anyMatch(
-                    m -> !k8SCoreRuntime.isServiceAvailable(m.getServiceName())
-            );
+        // We compare the desired state -> AppDefinition to JHipster K8s Native CRDs
+        JHipsterApplicationDefinition appDefinition = app.getSpec().getAppDefinition();
+        boolean isGatewayAvailable = false;
+        boolean isRegistryAvailable = false;
+        boolean microServicesAvailable[] = new boolean[app.getSpec().getMicroservices().size()];
+        int microServicesCount = 0;
+        // 1) need to get the microservice from the app spec
+        // 2) I need to make sure that the microservice in the app def is in the app spec
+        // 2.1) I need to check that the microservice resource exist
+        //    2.2) for each microservice I need to check with k8sCoreRuntime that the service is available
+        // 3) if microservice type gateway, check for gateway in the spec
+        // 4) if microservice type registry, check for registry in the spec
+        Set<MicroServiceDescr> microservices = app.getSpec().getMicroservices();
+        for (JHipsterModuleDefinition mdd : appDefinition.getModules()) {
+            if (JDLParser.fromJDLServiceToKind(mdd.getType()).equals("Gateway")) {
+                String gateway = app.getSpec().getGateway();
+                if (gateway != null && !gateway.isEmpty()) {
+                    isGatewayAvailable = k8SCoreRuntime.isServiceAvailable(gateway);
+                }
+            }
+            if (JDLParser.fromJDLServiceToKind(mdd.getType()).equals("MicroService")) {
 
+                for (MicroServiceDescr md : microservices) {
+                    // 1) check that the CRD Kind MicroService exist
+                    if (md.getName().equals(mdd.getName()) && md.getKind().equals("MicroService")) {
+                        // 2) check that the service referenced from the CRD exist
+                        microServicesAvailable[microServicesCount] = k8SCoreRuntime.isServiceAvailable(md.getServiceName());
+                        microServicesCount++;
+                    }
+                }
+
+            }
 
         }
-        String gateway = app.getSpec().getGateway();
-        boolean gatewayAvailable = false;
-        if (gateway != null && !gateway.isEmpty()) {
-            gatewayAvailable = k8SCoreRuntime.isServiceAvailable(gateway);
-        }
+
+        // The registry is not a microservice in the app def so I need to check separately
         String registry = app.getSpec().getRegistry();
-        boolean registryAvailable = false;
         if (registry != null && !registry.isEmpty()) {
-            registryAvailable = k8SCoreRuntime.isServiceAvailable(registry);
+            isRegistryAvailable = k8SCoreRuntime.isServiceAvailable(registry);
         }
 
-        if (!moduleMissing && gatewayAvailable && registryAvailable) {
+        boolean areMicroServicesAvailable = checkMicroServicesAvailability(microservices.size(), microServicesAvailable);
+        logger.info("MicroServices Available?: " + areMicroServicesAvailable);
+        logger.info("Gateway Available?: " + isGatewayAvailable);
+        logger.info("Registry Available?: " + isRegistryAvailable);
+        if (areMicroServicesAvailable && isGatewayAvailable && isRegistryAvailable) {
             return true;
         }
 
+        return false;
+    }
+
+    private boolean checkMicroServicesAvailability(int size, boolean[] microServicesAvailable) {
+        if (microServicesAvailable.length == size && microServicesAvailable.length > 0) {
+            for (boolean a : microServicesAvailable) {
+                if (!a) {
+                    return false;
+                }
+            }
+            return true;
+        }
         return false;
     }
 
@@ -63,11 +102,15 @@ public class AppService {
             Application application = apps.get(appName);
             if (application != null) {
                 ApplicationSpec spec = application.getSpec();
+                //If the APP already have the gateway then ignore, to avoid one API call
+                if (spec.getGateway() != null && !spec.getGateway().isEmpty() && spec.getGateway().equals(gateway.getSpec().getServiceName())) {
+                    return;
+                }
                 if (k8SCoreRuntime.isServiceAvailable(gateway.getSpec().getServiceName())) {
                     spec.setGateway(gateway.getSpec().getServiceName());
                     application.setSpec(spec);
                     apps.put(application.getMetadata().getName(), application);
-                    logger.info("> Application: " + appName + " updated with Registry " + gateway.getMetadata().getName());
+                    logger.info("> Application: " + appName + " updated with Gateway " + gateway.getMetadata().getName());
                 } else {
                     logger.error("Registry: " + gateway.getSpec().getServiceName() + " doesn't exist. ");
                 }
@@ -77,12 +120,17 @@ public class AppService {
         }
     }
 
+
     public void addRegistryToApp(Registry registry) {
         String appName = registry.getMetadata().getLabels().get("app");
         if (appName != null && !appName.isEmpty()) {
             Application application = apps.get(appName);
             if (application != null) {
                 ApplicationSpec spec = application.getSpec();
+                //If the APP already have the registry then ignore, to avoid one API call
+                if (spec.getRegistry() != null && !spec.getRegistry().isEmpty() && spec.getRegistry().equals(registry.getSpec().getServiceName())) {
+                    return;
+                }
                 if (k8SCoreRuntime.isServiceAvailable(registry.getSpec().getServiceName())) {
                     spec.setRegistry(registry.getSpec().getServiceName());
                     application.setSpec(spec);
@@ -97,28 +145,28 @@ public class AppService {
         }
     }
 
-    public void addModuleToApp(CustomService module) {
-        String appName = module.getMetadata().getLabels().get("app");
+    public void addMicroServiceToApp(CustomService microService) {
+        String appName = microService.getMetadata().getLabels().get("app");
         if (appName != null && !appName.isEmpty()) {
             Application application = apps.get(appName);
             if (application != null) {
                 ApplicationSpec spec = application.getSpec();
-                Set<ModuleDescr> modules = spec.getModules();
-                if (modules == null) {
-                    modules = new HashSet<>();
+                Set<MicroServiceDescr> microservices = spec.getMicroservices();
+                if (microservices == null) {
+                    microservices = new HashSet<>();
                 }
-                if (k8SCoreRuntime.isServiceAvailable(module.getSpec().getServiceName())) {
-                    modules.add(new ModuleDescr(module.getMetadata().getName(), module.getKind(), module.getSpec().getServiceName()));
-                    spec.setModules(modules);
+                if (k8SCoreRuntime.isServiceAvailable(microService.getSpec().getServiceName())) {
+                    microservices.add(new MicroServiceDescr(microService.getMetadata().getName(), microService.getKind(), microService.getSpec().getServiceName()));
+                    spec.setMicroservices(microservices);
                     application.setSpec(spec);
                     apps.put(application.getMetadata().getName(), application);
-                    logger.info("> Application: " + appName + " updated with Service " + module.getMetadata().getName());
+                    logger.info("> Application: " + appName + " updated with Service " + microService.getMetadata().getName());
                 } else {
-                    logger.error("Service: " + module.getSpec().getServiceName() + " doesn't exist. ");
+                    logger.error("Service: " + microService.getSpec().getServiceName() + " doesn't exist. ");
                 }
             }
         } else {
-            logger.error("> Orphan Service: " + module.getMetadata().getName());
+            logger.error("> Orphan Service: " + microService.getMetadata().getName());
         }
     }
 
@@ -151,21 +199,21 @@ public class AppService {
         }
     }
 
-    public void removeServiceFromApp(CustomService service) {
+    public void removeMicroServiceFromApp(CustomService service) {
         String appName = service.getMetadata().getLabels().get("app");
         if (appName != null && !appName.isEmpty()) {
             Application application = apps.get(appName);
             if (application != null) {
                 ApplicationSpec spec = application.getSpec();
-                Set<ModuleDescr> modules = spec.getModules();
-                if (modules == null) {
-                    modules = new HashSet<>();
+                Set<MicroServiceDescr> microservices = spec.getMicroservices();
+                if (microservices == null) {
+                    microservices = new HashSet<>();
                 }
-                modules.removeIf(m -> m.getKind().equals(service.getKind()) && m.getName().equals(service.getMetadata().getName()));
-                spec.setModules(modules);
+                microservices.removeIf(m -> m.getKind().equals(service.getKind()) && m.getName().equals(service.getMetadata().getName()));
+                spec.setMicroservices(microservices);
                 application.setSpec(spec);
                 apps.put(application.getMetadata().getName(), application);
-                logger.info(">> Deleted Service " + service.getMetadata().getName() + " from app " + appName);
+                logger.info(">> Deleted MicroService " + service.getMetadata().getName() + " from app " + appName);
             }
         }
     }
