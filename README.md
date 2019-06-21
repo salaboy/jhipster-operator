@@ -17,7 +17,7 @@ The first that we will do, is to generate an Application form a JHipster JDL DSL
 You can find the app.jdl file in this repository.
 
 # Generating the JHipster Application
-In order to create the source code for this application we need to import our JDL file by calling:
+In order to create the source code for this application we need to import our JDL file by calling (you can find the app.jdl file inside the example-app/ directory):
 > jhipster import-jdl app.jdl
 
 By running this command we will generate 3 maven projects:
@@ -46,10 +46,11 @@ Today, there are three ways in which you can create the K8s manifests:
 3) You can use jhipster kubernetes-helm generator
 
 Let's use the second option for simplicity (but I encourage you to try the HELM approach as well):
+```
 > mkdir kubernetes/
 > cd kubernetes/
 > jhipster kubernetes
-
+```
 
 Then choose: 
 1) Microservice application + Enter
@@ -100,10 +101,14 @@ KIND allows us to create and delete clusters in an automated fashion, then we ca
 In order to install KIND please follow the instrutions in the Github repo: [KIND](https://github.com/kubernetes-sigs/kind
 
 Once KIND is installed just run:
+```
 > kind create cluster
+```
 
 Once the cluster is up, you can try it out with 
+```
 > kubectl get pods
+```
 
 This should return 
 ```
@@ -158,7 +163,11 @@ like:
 
 Also suggested by the generator to deploy all the services into K8s. 
 ```
-salaboy@kubernetes> bash kubectl-apply.sh
+> bash kubectl-apply.sh
+```
+With output: 
+
+```
 namespace/jhipster created
 configmap/application-config created
 secret/registry-secret created
@@ -184,17 +193,17 @@ Also notice that we are creating 3 pods which will run MySQL, and KIND will need
 
 In order to change the current namespace (so we can get resources without specifying the namespace everytime) we can switch to the jhipster one by running:
 ```
-kubectl config set-context $(kubectl config current-context) --namespace=jhipster
+> kubectl config set-context $(kubectl config current-context) --namespace=jhipster
 ```
 
 Once this is done we can check that our services are running:
 ```
-> k get pods
+> kubectl get pods
 ```
 
 Then to access the service, because we are running 
 ```
-kubectl port-forward svc/gateway 8080:8080 -n jhipster
+> kubectl port-forward svc/gateway 8080:8080 -n jhipster
 ```
 
 # Operator Time! (JHipster Operator)!
@@ -208,31 +217,31 @@ You can skip this section because a docker image is already provided in Docker H
 If you want to build the JHipster Operator from the Source Code you can clone the project from GitHub: http://github.com/salaboy/jhipster-operator
 
 ```
-git clone http://github.com/salaboy/jhipster-operator
-cd jhipster-operator/
-mvn clean install
+> git clone http://github.com/salaboy/jhipster-operator
+> cd jhipster-operator/
+> mvn clean install
 ```
 
 Once the project is built, we can build the Docker Image from it
 ```
-docker build -t jhipster-operator .
+> docker build -t jhipster-operator .
 ```
 
 Once we have the docker image ready we can share that with our KIND cluster
 
 ```
-kind load docker-image jhipster-operator
+> kind load docker-image jhipster-operator
 ```
 
 ## Deploying the JHipster K8s Operator
 In order to deploy the JHipster Operator you can run:
 ```
-cd kubernetes/
-bash deploy.sh 
+> cd kubernetes/
+> bash deploy.sh 
 ```
+
 You should get the following output:
 ```
-salaboy@kubernetes> bash deploy.sh 
 clusterrolebinding.rbac.authorization.k8s.io/jhipster-operator created
 clusterrole.rbac.authorization.k8s.io/jhipster-operator created
 deployment.apps/jhipster-operator created
@@ -254,13 +263,13 @@ There are three things happening here:
 
 Doing now:
 ```
-kubectl get pods
+> kubectl get pods
 ```
 
 Should return our new **jhipster-operator-<hash>** pod, plus all the other pods from our application. 
 we can tail the logs from the operator:
 ```
-kubectl logs -f jhipster-operator-<hash>
+> kubectl logs -f jhipster-operator-<hash>
 ```
 
 We should be able to see something like this in the logs:
@@ -286,7 +295,7 @@ We can do this by sending via HTTP a POST request to http://localhost:8081/apps/
 
 There is already a request.json inside the example-app/ directory so you can do:
 ```
-http POST http://localhost:8081/apps/ < request.json
+> http POST http://localhost:8081/apps/ < request.json
 ```
 
 This will instruct the operator that a new JHipster Application is required and the operator will have the logic to map and validate the services that are running and create the JHipster resources based on the "app.jdl" description.
@@ -297,17 +306,23 @@ Now you can do:
 > kubectl get jh 
 ```
 to get all the JHipster Applications.
+
 Or:
 ```
-kubectl get ms (to get all microservices)
-kubectl get g (to get all gateways)
-kubectl get r (to get all registries)
+> kubectl get ms (to get all microservices)
+> kubectl get g (to get all gateways)
+> kubectl get r (to get all registries)
+```
+
+You can also try describe on jh resources:
+```
+> kubectl describe jh <HERE Application Name>
 ```
 
 You can now, of course control these resources by calling the APIs directly and the Operator will react accordingly, due the reconcilation process (loop).
 For example:
 ```
-kubectl delete jh <name of the application>
+> kubectl delete jh <name of the application>
 ```
 
 This will delete the Resource instance and the Operator will be notified about this change and update the list of available Applications. 
