@@ -34,8 +34,8 @@ spec:
               done
       containers:
         - name: invoice-app
-          image: invoice
-          imagePullPolicy: Never
+          image: salaboy/invoice
+          #imagePullPolicy: Never
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: prod

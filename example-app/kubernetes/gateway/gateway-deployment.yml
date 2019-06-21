@@ -34,8 +34,8 @@ spec:
               done
       containers:
         - name: gateway-app
-          image: gateway
-          imagePullPolicy: Never
+          image: salaboy/gateway
+          #imagePullPolicy: Never
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: prod

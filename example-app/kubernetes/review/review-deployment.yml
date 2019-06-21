@@ -34,8 +34,8 @@ spec:
               done
       containers:
         - name: review-app
-          image: review
-          imagePullPolicy: Never
+          image: salaboy/review
+          #imagePullPolicy: Never
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: prod
