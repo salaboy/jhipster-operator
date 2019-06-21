@@ -315,7 +315,7 @@ We can do this by sending via HTTP a POST request to http://localhost:8081/apps/
 }
 ```
 
-There is already a request.json inside the example-app/ directory so you can do:
+There is already a request.json inside the [example-app/](https://github.com/salaboy/jhipster-operator/blob/master/example-app/request.json) directory so you can do:
 ```
 > http POST http://localhost:8081/apps/ < request.json
 ```
