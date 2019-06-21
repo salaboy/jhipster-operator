@@ -353,4 +353,8 @@ This will delete the Resource instance and the Operator will be notified about t
 
 # TODOs / Future Work
 - API Delete JHipster Application doesn't cascade, while kubectl does
+- UPDATE greenwich SR1 version to final
+- Update Spring boot version
+- Refactor JDL Parser
+- Refactor new App Operator handlers
 
