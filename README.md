@@ -226,12 +226,25 @@ In order to deploy the JHipster Operator you can run:
 cd kubernetes/
 bash deploy.sh 
 ```
+You should get the following output:
+```
+salaboy@kubernetes> bash deploy.sh 
+clusterrolebinding.rbac.authorization.k8s.io/jhipster-operator created
+clusterrole.rbac.authorization.k8s.io/jhipster-operator created
+deployment.apps/jhipster-operator created
+serviceaccount/jhipster-operator created
+service/jhipster-operator created
+customresourcedefinition.apiextensions.k8s.io/applications.alpha.k8s.jhipster.tech created
+customresourcedefinition.apiextensions.k8s.io/gateways.alpha.k8s.jhipster.tech created
+customresourcedefinition.apiextensions.k8s.io/microservices.alpha.k8s.jhipster.tech created
+customresourcedefinition.apiextensions.k8s.io/registries.alpha.k8s.jhipster.tech created
+```
 
 This script just apply all the manifests inside the **deploy/** and **deploy/crds** directory. 
 
 There are three things happening here: 
 - Security: create Role, RoleBinding and Service Account. This is required to grant access to our Operator to the Kubernetes APIs from inside a POD. This means that now the Operator has access to read and write Kubernetes Resources.  (Inside the deploy/ directory: cluster-role-binding.yaml, cluster-role.yaml and service-account.yaml)
-- Deploy Custom Resource Definitions: these are JHipster Specific types that now Kubernetes understand. I have defined 4 CRDs: Application, Module, Gateway and Registry. These definitions can be located inside the **crds** directory. (all resources inside the deploy/crds/ directory)
+- Deploy Custom Resource Definitions: these are JHipster Specific types that now Kubernetes understand. I have defined 4 CRDs: Application, MicroService, Gateway and Registry. These definitions can be located inside the **crds** directory. (all resources inside the deploy/crds/ directory)
 - Create the actual deployment that will use the security resources to operate our Custom Resource Definitions and how they relate to Kubernetes Native concepts. (inside the deploy/ directory: deployment.yaml and service.yaml)
 
 
@@ -256,6 +269,43 @@ tech.jhipster.operator.MyApplication     : + --------------------- END RECONCILE
 
 ## Interacting with the Operator
 So now we are in a state where there is a JHipster Application (the one that we created with the app.jdl file) running in our cluster and the Operator running. In order to link the two worlds we can notify the Operator that now it needs to manage this application.
-We can do that by sending the Operator the app.jdl file which contains the structure, so the Operator can validate that this application is up and running and make Kubernetes aware of this application specific concepts. 
+We can do that by sending the Operator the "app.jdl" file which contains the structure, so the Operator can validate that this application is up and running and make Kubernetes aware of this application specific concepts. 
+
+We can do this by sending via HTTP a POST request to http://localhost:8081/apps/ with a JSON body containing:
+```
+{
+  "name": "first-jhipster-app",
+  "version": "1.0",
+  "appJDLContent" : "<HERE APP.JDL Content"
+}
+```
+
+There is already a request.json inside the example-app/ directory so you can do:
+```
+http POST http://localhost:8081/apps/ < request.json
+```
+
+This will instruct the operator that a new JHipster Application is required and the operator will have the logic to map and validate the services that are running and create the JHipster resources based on the "app.jdl" description.
+
+Now that the Operator has created the new concepts in Kubernetes we can use the Kubernetes API to see our JHipster Applications and their modules.
+Now you can do:
+```
+> kubectl get jh 
+```
+to get all the JHipster Applications.
+Or:
+```
+kubectl get ms (to get all microservices)
+kubectl get g (to get all gateways)
+kubectl get r (to get all registries)
+```
+
+You can now, of course control these resources by calling the APIs directly and the Operator will react accordingly, due the reconcilation process (loop).
+For example:
+```
+kubectl delete jh <name of the application>
+```
+
+This will delete the Resource instance and the Operator will be notified about this change and update the list of available Applications. 
 
 
