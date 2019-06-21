@@ -1,7 +1,7 @@
 # JHipster Operator Getting Started Guide
 
-![JHipster](imgs/jhipster-logo.png "JHipster is cool!")
-![Kubernetes](imgs/kube.png "K8s is Awesome!")
+![JHipster Operator](imgs/jhipster-operator-logo.png "JHipster Operator is here!")
+
 
 
 On this step by step guide we will see how to install and work with the JHipster Kubernetes Operator
