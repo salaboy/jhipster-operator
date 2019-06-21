@@ -1,4 +1,9 @@
 # JHipster Operator Getting Started Guide
+
+![JHipster](imgs/jhipster-logo.png "JHipster is cool!")
+![Kubernetes](imgs/kube.png "K8s is Awesome!")
+
+
 On this step by step guide we will see how to install and work with the JHipster Kubernetes Operator
 
 First we will create an application, run it in Kubernetes KIND (local, if you don't have a cluster) and then we will deploy the 
@@ -30,7 +35,7 @@ In order to run your application (microservices) in Kubernetes you need to gener
 
 In general to work with JHipster into Kubernetes you will follow these steps:
 
-![]
+![Flow](imgs/jhipster-flow.png "Normal Flow")
 
 
 ## Creating K8s Manifests
@@ -194,8 +199,7 @@ kubectl port-forward svc/gateway 8080:8080 -n jhipster
 
 # Operator Time! (JHipster Operator)!
 
-Add Image for K8s Jhipster Operator
-![]()
+![Operator](imgs/jhipster-operator.png "Operator")
 
 ## Building the Operator 
 
