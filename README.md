@@ -255,6 +255,7 @@ In order to deploy the JHipster Operator you can run:
 > cd kubernetes/
 > bash deploy.sh 
 ```
+> **Note**: by default the deployment.yaml file is using the Docker image hosted in Docker hub: **salaboy/jhipster-operator**, if you want to use your own, you will need to build it and then load it in KIND. As stated in the previous section. But you will also need to change the image reference inside the deployment.yaml file as well as the imagePullPolicy to Never. 
 
 You should get the following output:
 ```
@@ -272,9 +273,9 @@ customresourcedefinition.apiextensions.k8s.io/registries.alpha.k8s.jhipster.tech
 This script just apply all the manifests inside the **deploy/** and **deploy/crds** directory. 
 
 There are three things happening here: 
-- Security: create Role, RoleBinding and Service Account. This is required to grant access to our Operator to the Kubernetes APIs from inside a POD. This means that now the Operator has access to read and write Kubernetes Resources.  (Inside the deploy/ directory: cluster-role-binding.yaml, cluster-role.yaml and service-account.yaml)
-- Deploy Custom Resource Definitions: these are JHipster Specific types that now Kubernetes understand. I have defined 4 CRDs: Application, MicroService, Gateway and Registry. These definitions can be located inside the **crds** directory. (all resources inside the deploy/crds/ directory)
-- Create the actual deployment that will use the security resources to operate our Custom Resource Definitions and how they relate to Kubernetes Native concepts. (inside the deploy/ directory: deployment.yaml and service.yaml)
+- **Security**: create Role, RoleBinding and Service Account. This is required to grant access to our Operator to the Kubernetes APIs from inside a POD. This means that now the Operator has access to read and write Kubernetes Resources.  (Inside the deploy/ directory: cluster-role-binding.yaml, cluster-role.yaml and service-account.yaml)
+- **Deploy Custom Resource Definitions**: these are JHipster Specific types that now Kubernetes understand. I have defined 4 CRDs: Application, MicroService, Gateway and Registry. These definitions can be located inside the **crds** directory. (all resources inside the deploy/crds/ directory)
+- **Deployment**: Create the actual deployment that will use the security resources to operate our Custom Resource Definitions and how they relate to Kubernetes Native concepts. (inside the deploy/ directory: deployment.yaml and service.yaml)
 
 
 Doing now:
