@@ -34,7 +34,9 @@ spec:
               done
       containers:
         - name: review-app
-          image: salaboy/review
+          image: salaboy/review:jhipster
+          #For KIND
+          #image: review
           #imagePullPolicy: Never
           env:
             - name: SPRING_PROFILES_ACTIVE

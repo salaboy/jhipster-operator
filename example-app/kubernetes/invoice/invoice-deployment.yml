@@ -34,7 +34,9 @@ spec:
               done
       containers:
         - name: invoice-app
-          image: salaboy/invoice
+          image: salaboy/invoice:jhipster
+          #For KIND
+          #image: invoice
           #imagePullPolicy: Never
           env:
             - name: SPRING_PROFILES_ACTIVE
