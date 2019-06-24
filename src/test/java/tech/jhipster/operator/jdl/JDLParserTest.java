@@ -1,12 +1,11 @@
 package tech.jhipster.operator.jdl;
 
+import static org.junit.Assert.*;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Iterator;
-
-import static org.junit.Assert.*;
 
 public class JDLParserTest {
 
@@ -55,9 +54,9 @@ public class JDLParserTest {
         assertEquals(2, app.getModules().size());
         for (JHipsterModuleDefinition md : app.getModules()) {
             if (md.getType().equals("gateway")) {
-                assertEquals(md.getName(), "gateway");
+                assertModuleDefinition(md, "gateway", "gateway", null);
             } else if (md.getType().equals("microservice")) {
-                assertEquals(md.getName(), "invoice");
+                assertModuleDefinition(md, "invoice", "microservice", "8081");
             }
         }
 
@@ -146,14 +145,27 @@ public class JDLParserTest {
         assertEquals(3, app.getModules().size());
 
         for (JHipsterModuleDefinition md : app.getModules()) {
-            if (md.getType().equals("gateway")) {
-                assertEquals(md.getName(), "gateway");
-            } else if (md.getType().equals("microservice")) {
-                assertTrue(md.getName().equals("invoice") || md.getName().equals("review"));
+            switch (md.getType()) {
+                case "gateway":
+                    assertModuleDefinition(md, "gateway", "gateway", null);
+                    break;
+                case "microservice":
+                    if (md.getName().equals("invoice")) {
+                        assertModuleDefinition(md, "invoice", "microservice", "8081");
+                    } else {
+                        assertModuleDefinition(md, "review", "microservice", "8081");
+                    }
+                    break;
             }
         }
 
 
         System.out.println("Application: " + app);
+    }
+
+    private void assertModuleDefinition(JHipsterModuleDefinition md, String name, String type, String port) {
+        assertEquals(md.getName(), name);
+        assertEquals(md.getType(), type);
+        assertEquals(md.getPort(), port);
     }
 }
