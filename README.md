@@ -3,17 +3,18 @@
 ![JHipster Operator](imgs/jhipster-operator-logo.png "JHipster Operator is here!")
 
 
-On this step by step guide we will see how to install and work with the JHipster Kubernetes Operator
+On this step by step guide we will see how to install and work with the JHipster Kubernetes Operator.
 
 First we will create an application, run it in Kubernetes KIND (local, if you don't have a cluster) and then we will deploy the 
 JHipster Kubernetes Operator to teach Kubernetes about JHipster's Apps.
 
-The first that we will do, is to generate an Application form a JHipster JDL DSL, which describes a JHipster Application using the MicroServices approach. This application is composed by:
+We will generate an Application form a JHipster JDL DSL, which describes a JHipster Application using the MicroServices approach. This application is composed by:
 - A Gateway that also hosts the User Internface
 - Invoice Service (which hosts three entities: Shipment, Order, Invoice)
 - Review Service (which doesn't have any entity but will be in charge of reviewing the Invoice Service Entities)
 
 You can find the [app.jdl](https://github.com/salaboy/jhipster-operator/blob/master/example-app/app.jdl) file in this repository.
+
 
 # Generating the JHipster Application
 In order to create the source code for this application we need to import our JDL file by calling (you can find the app.jdl file inside the example-app/ directory):
