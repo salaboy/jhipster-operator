@@ -63,7 +63,7 @@ public class JHipsterApplicationDefinition {
         return "JHipsterApplicationDefinition{" +
                 "name='" + name + '\'' +
                 ", modules=" + modules +
-                ", JDLContent='" + JDLContent + '\'' +
+                ", JDLContent='" + JDLContent.replace("\n", "\\") + '\'' +
                 '}';
     }
 }

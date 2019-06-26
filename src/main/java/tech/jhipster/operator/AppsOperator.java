@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import tech.jhipster.operator.app.AppCRDs;
 import tech.jhipster.operator.jdl.JDLParser;
 import tech.jhipster.operator.jdl.JHipsterApplicationDefinition;
+import tech.jhipster.operator.jdl.JHipsterModuleDefinition;
 
 import java.util.*;
 
@@ -77,7 +78,6 @@ public class AppsOperator {
      */
     public boolean areRequiredCRDsPresent() {
         try {
-            //@TODO: rename microservice to MicroService to follow JHipster semantics
             k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "MicroService", MicroService.class);
             k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "Gateway", Gateway.class);
             k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "Registry", Registry.class);
@@ -243,7 +243,7 @@ public class AppsOperator {
     }
 
     /*
-     * Register Application Watch
+     * Register an Application Resource Watch
      *  - This watch is in charge of adding and removing apps to/from the In memory desired state
      */
     private void registerApplicationWatch() {
@@ -292,9 +292,8 @@ public class AppsOperator {
     }
 
     /*
-     * Register Registry Watch
+     * Register a MicroService Resource Watch
      */
-
     private void registerMicroServiceWatch() {
         logger.info("> Registering MicroService CRD Watch");
         microServicesCRDClient.withResourceVersion(microServicesResourceVersion).watch(new Watcher<MicroService>() {
@@ -319,9 +318,8 @@ public class AppsOperator {
     }
 
     /*
-     * Register Service A Watch
+     * Register a Registry Resource Watch
      */
-
     private void registerRegistryWatch() {
         logger.info("> Registering Registry CRD Watch");
         registriesCRDClient.withResourceVersion(registriesResourceVersion).watch(new Watcher<Registry>() {
@@ -347,6 +345,9 @@ public class AppsOperator {
         registryWatchRegistered = true;
     }
 
+    /*
+     * Register a Gateway Resource Watch
+     */
     private void registerGatewayWatch() {
         logger.info("> Registering Gateway CRD Watch");
         gatewaysCRDClient.withResourceVersion(gatewaysResourceVersion).watch(new Watcher<Gateway>() {
@@ -405,12 +406,161 @@ public class AppsOperator {
                         app.getSpec().setUrl("N/A");
                         logger.info("> App: " + appName + ", status: UNHEALTHY. \n ");
                     }
+                    // Notify K8s about the updates required
                     appCRDClient.createOrReplace(app);
                 }
         );
 
     }
 
+    // Lifecycle Management methods
+    // @TODO: maybe move all these lifecycle management methods out of the operator to a delegate
+
+    /*
+     * Create a new JHipster App with all its resources based on a JHipsterApplicationDefinition
+     *  Which is usually generated based on a JDL definition
+     */
+
+    public void newApp(JHipsterApplicationDefinition appDefinition) {
+        Application app = createNewApplicationFromDef(appDefinition);
+
+        // Creating the Root Resource: JHipster App
+        Application storedApp = appCRDClient.create(app);
+
+        List<OwnerReference> ownerReferences = createOwnerReferencesFromApp(storedApp);
+
+        Map<String, String> labels = Map.of("app", appDefinition.getName());
+
+
+        // Create Registry Resource
+        Registry registry = createRegistryForApp(labels, ownerReferences);
+
+        registriesCRDClient.create(registry);
+
+        // Create Modules Resources
+        appDefinition.getModules().forEach(md -> {
+                    if (JDLParser.fromJDLServiceToKind(md.getType()).equals("Gateway")) {
+                        Gateway gateway = createGatewayForApp(md, labels, ownerReferences);
+                        gatewaysCRDClient.create(gateway);
+                    } else {
+                        MicroService microService = createMicroServiceForApp(md, labels, ownerReferences);
+                        microServicesCRDClient.create(microService);
+                    }
+                }
+        );
+
+    }
+
+    /*
+     * Delete a JHipster Application by name
+     */
+    public void deleteApp(String appName) {
+        Application app = appService.getApp(appName);
+        //@TODO: delete by API doesn't cascade yet..
+        appCRDClient.delete(app);
+    }
+
+
+    /*
+     * Create an Application Resource (based on a Application CRD)
+     */
+    private Application createNewApplicationFromDef(JHipsterApplicationDefinition appDefinition) {
+        Application app = new Application();
+        ObjectMeta objectMeta = new ObjectMeta();
+        objectMeta.setName(appDefinition.getName());
+        objectMeta.setAdditionalProperty("jdl", appDefinition.getJDLContent());
+        objectMeta.setFinalizers(Arrays.asList("foregroundDeletion"));
+        app.setMetadata(objectMeta);
+        ApplicationSpec spec = new ApplicationSpec();
+        spec.setAppDefinition(appDefinition);
+        spec.setVersion(appDefinition.getVersion());
+        app.setSpec(spec);
+        return app;
+    }
+
+    /*
+     * Create owner references for modules of an application
+     */
+    private List<OwnerReference> createOwnerReferencesFromApp(Application app) {
+        if (app.getMetadata().getUid() == null || app.getMetadata().getUid().isEmpty()) {
+            throw new IllegalStateException("The app needs to be saved first, the UUID needs to be present.");
+        }
+        OwnerReference ownerReference = new OwnerReference();
+        ownerReference.setUid(app.getMetadata().getUid());
+        ownerReference.setName(app.getMetadata().getName());
+        ownerReference.setKind(app.getKind());
+        ownerReference.setController(true);
+        ownerReference.setBlockOwnerDeletion(true);
+        ownerReference.setApiVersion(app.getApiVersion());
+
+        return Arrays.asList(ownerReference);
+
+    }
+
+    /*
+     * Create a registry module for an application, apply the labels and the owner references
+     */
+    private Registry createRegistryForApp(Map<String, String> labels, List<OwnerReference> ownerReferences) {
+        // By default I will create a Registry to make the App Complete
+        Registry registry = new Registry();
+        ObjectMeta objectMetaRegistry = new ObjectMeta();
+        objectMetaRegistry.setName("jhipster-registry");
+        objectMetaRegistry.setOwnerReferences(ownerReferences);
+        objectMetaRegistry.setFinalizers(Arrays.asList("foregroundDeletion"));
+        objectMetaRegistry.setLabels(labels);
+        registry.setMetadata(objectMetaRegistry);
+        ServiceSpec registrySpec = new ServiceSpec();
+        registrySpec.setServiceName("jhipster-registry");
+        registrySpec.setServiceVersion("1.0");
+        registrySpec.setServicePort("8761"); //hardcoded in jhipster k8s scripts and yamls
+        registry.setSpec(registrySpec);
+
+        return registry;
+    }
+
+    /*
+     * Create a gateway module for an application, apply the labels and the owner references
+     */
+    private Gateway createGatewayForApp(JHipsterModuleDefinition md, Map<String, String> labels, List<OwnerReference> ownerReferences) {
+        Gateway gateway = new Gateway();
+        ObjectMeta objectMetaGateway = new ObjectMeta();
+        objectMetaGateway.setName(md.getName());
+        objectMetaGateway.setOwnerReferences(ownerReferences);
+        objectMetaGateway.setFinalizers(Arrays.asList("foregroundDeletion"));
+        objectMetaGateway.setLabels(labels);
+        gateway.setMetadata(objectMetaGateway);
+        ServiceSpec gatewaySpec = new ServiceSpec();
+        gatewaySpec.setServiceName(md.getName());
+        gatewaySpec.setServiceVersion("1.0");
+        if (md.getPort() == null || md.getPort().isEmpty()) {
+            gatewaySpec.setServicePort("8080");
+        } else {
+            gatewaySpec.setServicePort(md.getPort());
+        }
+        gateway.setSpec(gatewaySpec);
+        return gateway;
+    }
+
+    /*
+     * Create a microservice module for an application, apply the labels and the owner references
+     */
+    private MicroService createMicroServiceForApp(JHipsterModuleDefinition md, Map<String, String> labels, List<OwnerReference> ownerReferences) {
+        MicroService microService = new MicroService();
+        ObjectMeta objectMetaMicroService = new ObjectMeta();
+        objectMetaMicroService.setName(md.getName());
+
+        objectMetaMicroService.setOwnerReferences(ownerReferences);
+        objectMetaMicroService.setLabels(labels);
+        objectMetaMicroService.setFinalizers(Arrays.asList("foregroundDeletion"));
+        microService.setMetadata(objectMetaMicroService);
+
+        ServiceSpec serviceSpec = new ServiceSpec();
+        serviceSpec.setServiceName(md.getName());
+        serviceSpec.setServiceVersion("1.0");
+        serviceSpec.setServicePort(md.getPort());
+        microService.setSpec(serviceSpec);
+        return microService;
+    }
 
     public CustomResourceDefinition getMicroServiceCRD() {
         return microServiceCRD;
@@ -438,104 +588,6 @@ public class AppsOperator {
 
     public boolean isInitDone() {
         return initDone;
-    }
-
-
-    //@TODO: refactor this nightmare :)
-    public void newApp(JHipsterApplicationDefinition appDefinition) {
-        Application app = new Application();
-        ObjectMeta objectMeta = new ObjectMeta();
-        objectMeta.setName(appDefinition.getName());
-        objectMeta.setAdditionalProperty("jdl", appDefinition.getJDLContent());
-        objectMeta.setFinalizers(Arrays.asList("foregroundDeletion"));
-        app.setMetadata(objectMeta);
-        ApplicationSpec spec = new ApplicationSpec();
-        spec.setAppDefinition(appDefinition);
-        spec.setVersion(appDefinition.getVersion());
-        app.setSpec(spec);
-
-        Application storedApp = appCRDClient.create(app);
-
-
-        OwnerReference ownerReference = new OwnerReference();
-        ownerReference.setUid(storedApp.getMetadata().getUid());
-        ownerReference.setName(storedApp.getMetadata().getName());
-        ownerReference.setKind(storedApp.getKind());
-        ownerReference.setController(true);
-        ownerReference.setBlockOwnerDeletion(true);
-        ownerReference.setApiVersion(storedApp.getApiVersion());
-        List<OwnerReference> ownerReferences = new ArrayList<>();
-        ownerReferences.add(ownerReference);
-
-        Map<String, String> labels = new HashMap<>();
-        labels.put("app", appDefinition.getName());
-
-        // By default I will create a Registry to make the App Complete
-        Registry registry = new Registry();
-        ObjectMeta objectMetaRegistry = new ObjectMeta();
-        objectMetaRegistry.setName("jhipster-registry");
-        objectMetaRegistry.setOwnerReferences(ownerReferences);
-        objectMetaRegistry.setFinalizers(Arrays.asList("foregroundDeletion"));
-        objectMetaRegistry.setLabels(labels);
-        registry.setMetadata(objectMetaRegistry);
-        ServiceSpec registrySpec = new ServiceSpec();
-        registrySpec.setServiceName("jhipster-registry");
-        registrySpec.setServiceVersion("1.0");
-        registrySpec.setServicePort("8761"); //hardcoded in jhipster k8s scripts and yamls
-        registry.setSpec(registrySpec);
-
-
-        registriesCRDClient.create(registry);
-
-
-        appDefinition.getModules().forEach(md -> {
-                    if (JDLParser.fromJDLServiceToKind(md.getType()).equals("Gateway")) {
-                        Gateway gateway = new Gateway();
-                        ObjectMeta objectMetaGateway = new ObjectMeta();
-                        objectMetaGateway.setName(md.getName());
-                        objectMetaGateway.setOwnerReferences(ownerReferences);
-                        objectMetaGateway.setFinalizers(Arrays.asList("foregroundDeletion"));
-                        objectMetaGateway.setLabels(labels);
-                        gateway.setMetadata(objectMetaGateway);
-                        ServiceSpec gatewaySpec = new ServiceSpec();
-                        gatewaySpec.setServiceName(md.getName());
-                        gatewaySpec.setServiceVersion("1.0");
-                        if (md.getPort() == null || md.getPort().isEmpty()) {
-                            gatewaySpec.setServicePort("8080");
-                        } else {
-                            gatewaySpec.setServicePort(md.getPort());
-                        }
-                        gateway.setSpec(gatewaySpec);
-                        gatewaysCRDClient.create(gateway);
-                    } else {
-
-                        MicroService microService = new MicroService();
-                        ObjectMeta objectMetaMicroService = new ObjectMeta();
-                        objectMetaMicroService.setName(md.getName());
-
-                        objectMetaMicroService.setOwnerReferences(ownerReferences);
-                        objectMetaMicroService.setLabels(labels);
-                        objectMetaMicroService.setFinalizers(Arrays.asList("foregroundDeletion"));
-                        microService.setMetadata(objectMetaMicroService);
-
-
-                        ServiceSpec serviceSpec = new ServiceSpec();
-                        serviceSpec.setServiceName(md.getName());
-                        serviceSpec.setServiceVersion("1.0");
-                        serviceSpec.setServicePort(md.getPort());
-                        microService.setSpec(serviceSpec);
-
-                        microServicesCRDClient.create(microService);
-                    }
-                }
-        );
-
-    }
-
-    public void deleteApp(String appName) {
-        Application app = appService.getApp(appName);
-        //@TODO: delete by API doesn't cascade yet..
-        appCRDClient.delete(app);
     }
 
 

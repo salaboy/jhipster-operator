@@ -30,6 +30,12 @@ public class AppService {
 
     /*
      * Add the logic to define what are the rules for your application to be UP or DOWN
+     * 1) We need to get the microservices from the app spec
+     * 2) we need to make sure that the microservice in the app def is in the app spec
+     *   2.1) we need to check that the microservice resource exist
+     *   2.2) for each microservice I need to check with k8sCoreRuntime that the service is available
+     * 3) if microservice type gateway, check for gateway in the spec
+     * 4) if microservice type registry, check for registry in the spec
      */
     public boolean isAppHealthy(Application app) {
         // We compare the desired state -> AppDefinition to JHipster K8s Native CRDs
@@ -38,12 +44,7 @@ public class AppService {
         boolean isRegistryAvailable = false;
         boolean microServicesAvailable[] = new boolean[app.getSpec().getMicroservices().size()];
         int microServicesCount = 0;
-        // 1) need to get the microservice from the app spec
-        // 2) I need to make sure that the microservice in the app def is in the app spec
-        // 2.1) I need to check that the microservice resource exist
-        //    2.2) for each microservice I need to check with k8sCoreRuntime that the service is available
-        // 3) if microservice type gateway, check for gateway in the spec
-        // 4) if microservice type registry, check for registry in the spec
+        //
         Set<MicroServiceDescr> microservices = app.getSpec().getMicroservices();
         for (JHipsterModuleDefinition mdd : appDefinition.getModules()) {
             if (JDLParser.fromJDLServiceToKind(mdd.getType()).equals("Gateway")) {
