@@ -19,10 +19,10 @@ spec:
       containers:
       - name: jhipster-operator
         # For KIND
-        #image: jhipster-operator
-        #imagePullPolicy: Never
-        image: salaboy/jhipster-operator
-        imagePullPolicy: Always
+        image: jhipster-operator
+        imagePullPolicy: Never
+        ##image: salaboy/jhipster-operator
+        ##imagePullPolicy: Always
         ports:
         - containerPort: 8080
       serviceAccountName: jhipster-operator

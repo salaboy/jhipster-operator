@@ -35,9 +35,9 @@ public class AppService {
      *   2.1) we need to check that the microservice resource exist
      *   2.2) for each microservice I need to check with k8sCoreRuntime that the service is available
      * 3) if microservice type gateway, check for gateway in the spec
-     * 4) if microservice type registry, check for registry in the spec
+     * 4) if registry is not in the app definition so we need to check separately
      */
-    public boolean isAppHealthy(Application app) {
+    public boolean isAppHealthy(Application app, boolean log) {
         // We compare the desired state -> AppDefinition to JHipster K8s Native CRDs
         JHipsterApplicationDefinition appDefinition = app.getSpec().getAppDefinition();
         boolean isGatewayAvailable = false;
@@ -75,9 +75,12 @@ public class AppService {
         }
 
         boolean areMicroServicesAvailable = checkMicroServicesAvailability(microservices.size(), microServicesAvailable);
-        logger.info("MicroServices Available?: " + areMicroServicesAvailable);
-        logger.info("Gateway Available?: " + isGatewayAvailable);
-        logger.info("Registry Available?: " + isRegistryAvailable);
+        if (log) {
+            logger.info("\t> Checking app health: " + app.getMetadata().getName());
+            logger.info("\t\t> MicroServices Available?: " + areMicroServicesAvailable);
+            logger.info("\t\t> Gateway Available?: " + isGatewayAvailable);
+            logger.info("\t\t> Registry Available?: " + isRegistryAvailable);
+        }
         if (areMicroServicesAvailable && isGatewayAvailable && isRegistryAvailable) {
             return true;
         }
@@ -222,7 +225,7 @@ public class AppService {
 
     public List<String> getApps() {
         return apps.values().stream()
-                .filter(app -> isAppHealthy(app))
+                .filter(app -> isAppHealthy(app, false))
                 .map(a -> a.getMetadata().getName())
                 .collect(Collectors.toList());
     }

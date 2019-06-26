@@ -379,32 +379,31 @@ public class AppsOperator {
      */
     public void reconcile() {
         if (appService.getApps().isEmpty()) {
-            logger.info("> No Healthy Apps found.");
+            logger.info("> No Apps found.");
         }
         // For each App Desired State
         appService.getAppsMap().keySet().forEach(appName ->
                 {
                     Application app = appService.getApp(appName);
-                    logger.info("> Scanning App: " + appName + "...");
-                    if (appService.isAppHealthy(app)) {
-                        logger.info("> App Name: " + appName + " is up and running");
+                    logger.info("> App Found: " + appName + ". Scanning ...");
+                    if (appService.isAppHealthy(app, true)) {
                         app.getSpec().getMicroservices().forEach(m -> logger.info("\t> MicroService found: " + m));
                         app.getSpec().setStatus("HEALTHY");
                         String externalIp = k8SCoreRuntime.findExternalIP();
                         String url = "http://" + externalIp + "/apps/" + app.getMetadata().getName() + "/" + app.getSpec().getVersion() + "/";
                         appService.addAppUrl(app.getMetadata().getName(), url);
                         app.getSpec().setUrl(url);
-                        logger.info("> App: " + appName + ", status:  HEALTHY, URL: " + url + " \n");
+                        logger.info("\t> App: " + appName + ", status:  HEALTHY, URL: " + url + " \n");
                     } else {
-                        logger.error("> App Name: " + appName + " is down due missing services");
+                        logger.error("\t > App Name: " + appName + " is down due missing services");
                         if (app.getSpec().getMicroservices() == null || app.getSpec().getMicroservices().isEmpty()) {
-                            logger.info("App: " + appName + ": No MicroService found. ");
+                            logger.info("\t>App: " + appName + ": No MicroService found. ");
                         } else {
                             app.getSpec().getMicroservices().forEach(m -> logger.info("\t> MicroService found: " + m));
                         }
                         app.getSpec().setStatus("UNHEALTHY");
                         app.getSpec().setUrl("N/A");
-                        logger.info("> App: " + appName + ", status: UNHEALTHY. \n ");
+                        logger.info("\t> App: " + appName + ", status: UNHEALTHY. \n ");
                     }
                     // Notify K8s about the updates required
                     appCRDClient.createOrReplace(app);

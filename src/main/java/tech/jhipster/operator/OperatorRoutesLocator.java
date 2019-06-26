@@ -58,7 +58,6 @@ public class OperatorRoutesLocator implements RouteDefinitionLocator {
                         ApplicationList.class, DoneableApplication.class).list().getItems();
 
                 applications.forEach(app -> {
-                    //@TODO: read from virtual services from istio
 
                     List<RouteDefinition> appRouteDefinitions = new ArrayList<RouteDefinition>();
                     List<RouteDefinition> microServicesForApp = getMicroServicesRoutesForApplication(app);
@@ -74,7 +73,6 @@ public class OperatorRoutesLocator implements RouteDefinitionLocator {
                 });
             }
 
-            //@TODO: i need to remove routes old routes ?????
             return Flux.fromIterable(allRouteDefinitions);
         } catch (Exception e) {
             e.printStackTrace();
@@ -84,25 +82,14 @@ public class OperatorRoutesLocator implements RouteDefinitionLocator {
     }
 
 
-    //@TODO: improve routes and modules validation
+    /*
+     * Check if the application is healthy to add the application route to the gateway routes
+     */
     private boolean areApplicationRoutesReady(Application app, List<RouteDefinition> appRouteDefinitions) {
-        final AtomicInteger validated = new AtomicInteger();
-        if (appService.isAppHealthy(app)) { // ALL the required modules are present
-            logger.info("> App: " + app.getMetadata().getName() + " validation!");
-            Set<MicroServiceDescr> microservices = app.getSpec().getMicroservices();
-            if (microservices != null) {
-                microservices.forEach(md -> {
-                    appRouteDefinitions.forEach(rd -> {
-                        if (rd.getId().equals(app.getMetadata().getName() + ":" + md.getName())) {
-                            validated.incrementAndGet();
-                        }
-                    });
-                });
-                logger.info("> MicroServices size: " + microservices.size() + " and validated: " + validated);
-                if (validated.get() == microservices.size()) {
-                    return true;
-                }
-            }
+        if (appService.isAppHealthy(app, false)) {
+            logger.info("> Adding App: " + app.getMetadata().getName() + " to routes");
+            return true;
+
         }
 
         return false;
@@ -128,11 +115,11 @@ public class OperatorRoutesLocator implements RouteDefinitionLocator {
             predicateDefinition.setName("Path");
             String pattern = "";
             //@TODO: refactor this instance of
-            if(service instanceof Gateway){ // Gateway should go to the route and not use a special path
+            if (service instanceof Gateway) { // Gateway should go to the route and not use a special path
                 pattern = "/apps/" + app.getMetadata().getName() + "/" + app.getSpec().getVersion() + "/";
-            }else if(service instanceof Registry){ // Registry should go to the route and not use a special path
+            } else if (service instanceof Registry) { // Registry should go to the route and not use a special path
                 pattern = "/apps/" + app.getMetadata().getName() + "/" + app.getSpec().getVersion() + "/registry/";
-            }else {
+            } else {
                 pattern = "/apps/" + app.getMetadata().getName() + "/" + app.getSpec().getVersion() + "/" + path + "/" + service.getMetadata().getName() + "/";
             }
             predicateDefinition.addArg("pattern", pattern + "**");
@@ -141,7 +128,7 @@ public class OperatorRoutesLocator implements RouteDefinitionLocator {
             filter.setArgs(ImmutableMap.of("regexp", pattern + "(?<remaining>.*)",
                     "replacement", "/${remaining}"));
 
-            routeDefinition.setFilters(Arrays.asList( filter ));
+            routeDefinition.setFilters(Arrays.asList(filter));
             routeDefinitions.add(routeDefinition);
             logger.info("Route (id=" + app.getMetadata().getName() + ":" + service.getMetadata().getName() + ") added: " + pattern);
         });
