@@ -15,219 +15,42 @@ We will generate an Application form a JHipster JDL DSL, which describes a JHips
 
 You can find the [app.jdl](https://github.com/salaboy/jhipster-operator/blob/master/example-app/app.jdl) file in this repository.
 
+You can find all the steps to run a [JHipster MicroService Application in Kubernetes KIND here](https://salaboy.com/2019/06/27/jhipster-microservice-application-in-kubernetes-kind/).
+The operator example requires the previous application running in the cluster. 
 
-# Generating the JHipster Application
-In order to create the source code for this application we need to import our JDL file by calling (you can find the app.jdl file inside the example-app/ directory):
-```
-> jhipster import-jdl app.jdl
-```
-
-By running this command we will generate 3 maven projects:
-1) gateway
-2) invoice
-3) review
-
-> **Note**: The docker images for these services are published in Docker Hub:
->  - salaboy/gateway:jhipster
->  - salaboy/invoice:jhipster
->  - salaboy/review:jhipster
-
-Some details about these services: 
-- Gateway will run by default in port 8080
-- Invoice and Review will use 8081
-
-# Running your application in Kubernertes
-
-In order to run your application (microservices) in Kubernetes you need to generate Kubernetes Manifests, which are basically files that describe how Kubernetes will deploy and manage your services. 
-
-In general to work with JHipster into Kubernetes you will follow these steps:
-
-![Flow](imgs/jhipster-flow.png "Normal Flow")
-
-
-## Creating K8s Manifests
-
-Today, there are three ways in which you can create the K8s manifests: 
-1) You create your own manifests
-2) You can use jhipster kubernetes generator
-3) You can use jhipster kubernetes-helm generator
-
-Let's use the second option for simplicity (but I encourage you to try the HELM approach as well):
-```
-> mkdir kubernetes/
-> cd kubernetes/
-> jhipster kubernetes
-```
-
-> **Note**: The generated manifest can be found inside [example-app/kubernetes/](https://github.com/salaboy/jhipster-operator/tree/master/example-app). 
-> These manifests points to public docker images, if you want to use your locally generated images in KIND, you will need to modify the deployment manifests.
-
-Then choose: 
-1) Microservice application + Enter
-2) root directory ../ + Enter
-3) select the three services (gateway, invoice, review) with space and the arrows and then Enter
-4) Monitoring -> No
-5) Admin password (admin) Enter
-6) namespace: I will use "jhipster" + Enter
-7) name for the docker repository name (if you are planning to push your images to hub.docker.com) you should use your user name, I will use a local docker registry, so just Enter
-8) docker push (default value) + Enter
-9) No Istio for now
-10) Service Type for your edge services (in this case the gateway), I will choose LoadBalancer + Enter
-
-
- After this all the Kubernetes Manifest to run your services are generated. The only missing step is to generate your docker images that are going to be used by these manifest to run your services in the cluster. 
-
- The output of the generation shows how to create these docker images for each service. Everytime that you make a change in the service, you should generate a new docker image to contain those changes:
-
-```
- To generate the missing Docker image(s), please run:
-  ./mvnw -Pprod verify jib:dockerBuild in /gateway
-  ./mvnw -Pprod verify jib:dockerBuild in /invoice
-  ./mvnw -Pprod verify jib:dockerBuild in /review
-```
-
-You will also see in the output:
-  ```
-  WARNING! You will need to push your image to a registry. If you have not done so, use the following commands to tag and push the images:
-  docker push gateway
-  docker push invoice
-  docker push review
-  ```
-This last step (of pushing the docker images) is only required if the Cluster is remote and you have no other way to make the images available to the cluster.
-
-Now all you need is a cluster to run these services, welcome Kubernetes KIND. 
-
-## Kubernetes KIND
-[KIND](https://github.com/kubernetes-sigs/kind) stands for Kubernetes in Docker and based on their own description:
-```
-kind is a tool for running local Kubernetes clusters using Docker container "nodes".
-kind is primarily designed for testing Kubernetes 1.11+, initially targeting the conformance tests.
-```
-
-This is a great tool because it allows us to run a multi node cluster only depending on Docker. We don't need any VM tooling such as Vagrant used in projects like Minikube for example. Also the fact that KIND is targeting conformance tests, means that we have an hermetic environment where we can run our tests against a cluster that looks (from the API and topology prespective) pretty much as our production environments. 
-
-KIND allows us to create and delete clusters in an automated fashion, then we can automate deploying our services into it. This becomes really important when we have services or Operators which needs to interact with the cluster, due we don't want to mock those interactions, we want to test the real cluster behaviour for our components. 
-
-In order to install KIND please follow the instrutions in the Github repo: [KIND](https://github.com/kubernetes-sigs/kind
-
-Once KIND is installed just run:
-```
-> kind create cluster
-```
-
-Once the cluster is up, you can try it out with 
-```
-> kubectl get pods
-```
-
-This should return 
-```
-No resources found.
-```
-
-## Deploying our application to KIND Cluster
-Before moving forward we need to generate the docker images for our services, let's run what was suggested by the "jhipster kubernetes"
-```
- To generate the missing Docker image(s), please run:
-  ./mvnw -Pprod verify jib:dockerBuild in /gateway
-  ./mvnw -Pprod verify jib:dockerBuild in /invoice
-  ./mvnw -Pprod verify jib:dockerBuild in /review
-```
-
-Once this is done, we now should have 3 docker images loaded in our local Docker Deamon. Now we need to make these images available to KIND.
-Which we can do with:
-
-```
-> kind load docker-image gateway
-> kind load docker-image invoice
-> kind load docker-image review
-```
-
-> **Note**: The previous step is only required if you want to build your own images. The docker images for these services are published in Docker Hub:
->  - salaboy/gateway:jhipster
->  - salaboy/invoice:jhipster
->  - salaboy/review:jhipster
-
-Once this is done, we are ready to run
-```
-> bash kubectl-apply.sh
-```
-Before running the services, we need to adapt some of the Manifests to make sure that the Docker Images are not downloaded from a remote docker registry. **This is KIND specific.** And this is only required if you want to run with your own custom images. 
-
-We need to change the following files inside the kubernetes (manifest directory, generated by jhipster kubernetes):
-- gateway/gateway-deployment.yml
-- invoice/invoice-deployment.yml
-- review/review-deployment.yml
-You need to locate the section:
-```
-  containers:
-    - name: gateway-app
-      image: gateway
-```
-add
-```
-imagePullPolicy: Never
-```
-
-like: 
-```
-  containers:
-    - name: gateway-app
-      image: gateway
-      imagePullPolicy: Never
-```
-
-Also suggested by the generator to deploy all the services into K8s. 
-```
-> bash kubectl-apply.sh
-```
-With output: 
-
-```
-namespace/jhipster created
-configmap/application-config created
-secret/registry-secret created
-service/jhipster-registry created
-statefulset.apps/jhipster-registry created
-deployment.apps/gateway created
-deployment.apps/gateway-mysql created
-service/gateway-mysql created
-service/gateway created
-deployment.apps/invoice created
-deployment.apps/invoice-mysql created
-service/invoice-mysql created
-service/invoice created
-deployment.apps/review created
-deployment.apps/review-mysql created
-service/review-mysql created
-service/review created
-
-```
-> **Note**: the manifests hosted in this repo are pointing to the docker images hosted in docker hub, if you want to use your own, you will need to mofidify the manifests.
-
-Notice that this created in the first line a new namespace called **jhipster** as it was instructred in the generator wizard.
-Also notice that we are creating 3 pods which will run MySQL, and KIND will need to fetch from Docker Hub the MySQL docker image the first time that you run these commands.
-
-In order to change the current namespace (so we can get resources without specifying the namespace everytime) we can switch to the jhipster one by running:
-```
-> kubectl config set-context $(kubectl config current-context) --namespace=jhipster
-```
-
-Once this is done we can check that our services are running:
-```
-> kubectl get pods
-```
-
-Then to access the service, because we are running 
-```
-> kubectl port-forward svc/gateway 8080:8080 -n jhipster
-```
-
-# Operator Time! (JHipster Operator)!
+# JHipster Operator
 
 ![Operator](imgs/jhipster-operator.png "Operator")
 
-## Building the Operator 
+The JHipster Operators uses Kubernetes CRDs (Custom Resource Definitions) to encapsulate operational knowledge about JHipster Applications. 
+
+Main objectives: 
+- Understand JHipster Applications (root resource)
+  - And Modules (Gateway, MicroServices, Registry..) (secondary/managed resources)
+  - It makes K8s aware of these concepts
+- Understand a JHipster Application topology
+- Understand how things are wired together
+- Understand and validate the Applications State as a whole
+- Can provide hierarchical routing
+- Can provide advanced lifecycle management
+  - Shared infrastructure wiring
+  - Garbage collection / Orphan Services
+  - Versioning
+  - Advanced Dynamic Traffic Routing
+  - The use of Functions as part of applications
+
+This operator requires the following CRDs to be deployed to the cluster: 
+- applications.alpha.k8s.jhipster.tech
+- gateways.alpha.k8s.jhipster.tech
+- microservices.alpha.k8s.jhipster.tech
+- registries.alpha.k8s.jhipster.tech
+
+[These CRDs definitions can be found here](https://github.com/salaboy/jhipster-operator/tree/master/kubernetes/deploy/crds).
+
+Because the Operator will run inside a Kubernetes Pod, we need to grant the Operator's deployment with a special Service Account, Role and Role Bindings for it to be able to 
+interact with the Kubernetes APIs. [You can find these extra manifests here](https://github.com/salaboy/jhipster-operator/tree/master/kubernetes/deploy).
+
+## (Optional) Building the Operator 
 
 You can skip this section because a docker image is already provided in Docker Hub at **salaboy/jhipster-operator**
 
@@ -300,7 +123,10 @@ tech.jhipster.operator.MyApplication     : + --------------------- END RECONCILE
 
 ## Interacting with the Operator
 So now we are in a state where there is a JHipster Application (the one that we created with the app.jdl file) running in our cluster and the Operator running. In order to link the two worlds we can notify the Operator that now it needs to manage this application.
+
 We can do that by sending the Operator the **app.jdl** file which contains the structure, so the Operator can validate that this application is up and running and make Kubernetes aware of this application specific concepts. 
+
+
 First we need to expose the Operator to the outside world so we can send request to it:
 
 ```
@@ -323,14 +149,18 @@ There is already a request.json inside the [example-app/](https://github.com/sal
 
 This will instruct the operator that a new JHipster Application is required and the operator will have the logic to map and validate the services that are running and create the JHipster resources based on the "app.jdl" description.
 
-Now that the Operator has created the new concepts in Kubernetes we can use the Kubernetes API to see our JHipster Applications and their modules.
+Now that the Operator has created the new resources in Kubernetes we can use the Kubernetes API to see our JHipster Applications and their modules.
 Now you can do:
 ```
 > kubectl get jh 
 ```
 to get all the JHipster Applications.
 
-Or:
+```
+
+```
+
+Also you can get the modules by type:
 ```
 > kubectl get ms (to get all microservices)
 > kubectl get g (to get all gateways)
@@ -339,23 +169,28 @@ Or:
 
 You can also try describe on jh resources:
 ```
-> kubectl describe jh <HERE Application Name>
+> kubectl describe jh <NAME OF THE APPLICATION HERE>
 ```
 
 You can now, of course control these resources by calling the APIs directly and the Operator will react accordingly, due the reconcilation process (loop).
 For example:
 ```
-> kubectl delete jh <name of the application>
+> kubectl delete jh <NAME OF THE APPLICATION HERE>
 ```
 
-This will delete the Resource instance and the Operator will be notified about this change and update the list of available Applications. 
+This will delete the Resource instance and the Operator will be notified about this change and update the list of available Applications. Notice
+that the Kubernetes Garbage collection mechanism kick-in due the JHipster Application Reosource is the Owner of Microservices, Gateways and Registries.
+This means that by deleting a JHipster App we will be also deleting all the associated modules. 
 
-# Open Questions
 
 # TODOs / Future Work
 - API Delete JHipster Application doesn't cascade, while kubectl does
 - UPDATE greenwich SR1 version to final
 - Update Spring boot version
-- Refactor JDL Parser
-- Refactor new App Operator handlers
+- Define Operator Cloud Events
+- Add Swagger docs
+- Istio integration
+- KNative integration
+- Jenkins X / Tekton Pipelines integration
+![Future JHipster Operator](imgs/jhipster-operator-future.png "Future JHipster Operator is here!")
 
