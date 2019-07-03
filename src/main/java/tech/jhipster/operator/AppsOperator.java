@@ -76,7 +76,7 @@ public class AppsOperator {
     /*
      * Check for Required CRDs
      */
-    public boolean areRequiredCRDsPresent() {
+    private boolean areRequiredCRDsPresent() {
         try {
             k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "MicroService", MicroService.class);
             k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "Gateway", Gateway.class);
@@ -129,7 +129,7 @@ public class AppsOperator {
      *  - It loads the existing resources (current state in the cluster)
      *  - It register the watches for our CRDs
      */
-    public boolean init() {
+    private boolean init() {
         logger.info("> JHipster K8s Operator is Starting!");
         // Creating CRDs Clients
         appCRDClient = k8SCoreRuntime.customResourcesClient(applicationCRD, Application.class, ApplicationList.class, DoneableApplication.class).inNamespace(k8SCoreRuntime.getNamespace());
@@ -386,7 +386,9 @@ public class AppsOperator {
                 {
                     Application app = appService.getApp(appName);
                     logger.info("> App Found: " + appName + ". Scanning ...");
+                    // Is the APP Healthy??
                     if (appService.isAppHealthy(app, true)) {
+                        // YES: Change the state and provide a URL
                         app.getSpec().getMicroservices().forEach(m -> logger.info("\t> MicroService found: " + m));
                         app.getSpec().setStatus("HEALTHY");
                         String externalIp = k8SCoreRuntime.findExternalIP();
@@ -395,6 +397,7 @@ public class AppsOperator {
                         app.getSpec().setUrl(url);
                         logger.info("\t> App: " + appName + ", status:  HEALTHY, URL: " + url + " \n");
                     } else {
+                        // NO: Change the state and remove the URL
                         logger.error("\t > App Name: " + appName + " is down due missing services");
                         if (app.getSpec().getMicroservices() == null || app.getSpec().getMicroservices().isEmpty()) {
                             logger.info("\t>App: " + appName + ": No MicroService found. ");
@@ -429,7 +432,6 @@ public class AppsOperator {
         List<OwnerReference> ownerReferences = createOwnerReferencesFromApp(storedApp);
 
         Map<String, String> labels = Map.of("app", appDefinition.getName());
-
 
         // Create Registry Resource
         Registry registry = createRegistryForApp(labels, ownerReferences);
