@@ -3,11 +3,12 @@ package tech.jhipster.operator.controllers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
 import tech.jhipster.operator.AppsOperator;
 import tech.jhipster.operator.app.AppService;
-import tech.jhipster.operator.jdl.JDLParser;
-import tech.jhipster.operator.jdl.JHipsterApplicationDefinition;
 
 import java.util.Collection;
 
@@ -27,13 +28,6 @@ public class JHipsterOperatorController {
         return applicationsService.getApps();
     }
 
-    @PostMapping("/apps/")
-    public void newJHipsterApp(@RequestBody NewJHipsterAppRequest request) {
-
-        JHipsterApplicationDefinition appDefinition = JDLParser.parse(request.getName(), request.getVersion(), request.getAppJDLContent());
-        logger.info("> Creating Application: " + appDefinition.getName());
-        appsOperator.newApp(appDefinition);
-    }
 
     @DeleteMapping("/apps/{appName}")
     public void deleteJHipsterApp(@PathVariable String appName) {

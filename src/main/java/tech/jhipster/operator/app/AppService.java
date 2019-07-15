@@ -11,9 +11,6 @@ import tech.jhipster.operator.crds.app.CustomService;
 import tech.jhipster.operator.crds.app.MicroServiceDescr;
 import tech.jhipster.operator.crds.gateway.Gateway;
 import tech.jhipster.operator.crds.registry.Registry;
-import tech.jhipster.operator.jdl.JDLParser;
-import tech.jhipster.operator.jdl.JHipsterApplicationDefinition;
-import tech.jhipster.operator.jdl.JHipsterModuleDefinition;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,34 +36,14 @@ public class AppService {
      */
     public boolean isAppHealthy(Application app, boolean log) {
         // We compare the desired state -> AppDefinition to JHipster K8s Native CRDs
-        JHipsterApplicationDefinition appDefinition = app.getSpec().getAppDefinition();
-        boolean isGatewayAvailable = false;
-        boolean isRegistryAvailable = false;
+
+        boolean isGatewayAvailable = true; //@TODO: need to implement the validation of structure
+        boolean isRegistryAvailable = true; //@TODO: need to implement the validation of structure
         boolean microServicesAvailable[] = new boolean[app.getSpec().getMicroservices().size()];
         int microServicesCount = 0;
         //
         Set<MicroServiceDescr> microservices = app.getSpec().getMicroservices();
-        for (JHipsterModuleDefinition mdd : appDefinition.getModules()) {
-            if (JDLParser.fromJDLServiceToKind(mdd.getType()).equals("Gateway")) {
-                String gateway = app.getSpec().getGateway();
-                if (gateway != null && !gateway.isEmpty()) {
-                    isGatewayAvailable = k8SCoreRuntime.isServiceAvailable(gateway);
-                }
-            }
-            if (JDLParser.fromJDLServiceToKind(mdd.getType()).equals("MicroService")) {
 
-                for (MicroServiceDescr md : microservices) {
-                    // 1) check that the CRD Kind MicroService exist
-                    if (md.getName().equals(mdd.getName()) && md.getKind().equals("MicroService")) {
-                        // 2) check that the service referenced from the CRD exist
-                        microServicesAvailable[microServicesCount] = k8SCoreRuntime.isServiceAvailable(md.getServiceName());
-                        microServicesCount++;
-                    }
-                }
-
-            }
-
-        }
 
         // The registry is not a microservice in the app def so I need to check separately
         String registry = app.getSpec().getRegistry();
