@@ -1,5 +1,7 @@
 package tech.jhipster.operator.app;
 
+import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.OwnerReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +12,7 @@ import tech.jhipster.operator.crds.app.ApplicationSpec;
 import tech.jhipster.operator.crds.app.CustomService;
 import tech.jhipster.operator.crds.app.MicroServiceDescr;
 import tech.jhipster.operator.crds.gateway.Gateway;
+import tech.jhipster.operator.crds.microservice.MicroService;
 import tech.jhipster.operator.crds.registry.Registry;
 
 import java.util.*;
@@ -77,15 +80,25 @@ public class AppService {
         return false;
     }
 
-    public void addGatewayToApp(Gateway gateway) {
+    /*
+     * Add Gateway to Application and set up the owner references
+     * @return the modified Gateway resource
+     */
+    public Gateway addGatewayToApp(Gateway gateway) {
         String appName = gateway.getMetadata().getLabels().get("app");
         if (appName != null && !appName.isEmpty()) {
             Application application = apps.get(appName);
             if (application != null) {
+                //Set OwnerReferences: the Application Owns the Gateway
+                List<OwnerReference> ownerReferencesFromApp = createOwnerReferencesFromApp(application);
+                ObjectMeta objectMetaRegistry = new ObjectMeta();
+                objectMetaRegistry.setOwnerReferences(ownerReferencesFromApp);
+                gateway.setMetadata(objectMetaRegistry);
+
                 ApplicationSpec spec = application.getSpec();
                 //If the APP already have the gateway then ignore, to avoid one API call
                 if (spec.getGateway() != null && !spec.getGateway().isEmpty() && spec.getGateway().equals(gateway.getSpec().getServiceName())) {
-                    return;
+                    return gateway;
                 }
                 if (k8SCoreRuntime.isServiceAvailable(gateway.getSpec().getServiceName())) {
                     spec.setGateway(gateway.getSpec().getServiceName());
@@ -97,16 +110,26 @@ public class AppService {
                 }
             }
         } else {
-            logger.error("> Orphan Service: " + gateway.getMetadata().getName());
+            logger.error("> Orphan Service: " + gateway.getMetadata().getName() + ", it reference this app that doesn't exist: " + gateway.getMetadata().getLabels().get("app"));
         }
+        return gateway;
     }
 
-
-    public void addRegistryToApp(Registry registry) {
+    /*
+     * Add Registry to Application and set up the owner references
+     * @return the modified Registry resource
+     */
+    public Registry addRegistryToApp(Registry registry) {
         String appName = registry.getMetadata().getLabels().get("app");
         if (appName != null && !appName.isEmpty()) {
             Application application = apps.get(appName);
             if (application != null) {
+                //Set OwnerReferences: the Application Owns the Registry
+                List<OwnerReference> ownerReferencesFromApp = createOwnerReferencesFromApp(application);
+                ObjectMeta objectMetaRegistry = new ObjectMeta();
+                objectMetaRegistry.setOwnerReferences(ownerReferencesFromApp);
+                registry.setMetadata(objectMetaRegistry);
+
                 ApplicationSpec spec = application.getSpec();
                 //If the APP already have the registry then ignore, to avoid one API call
                 if (spec.getRegistry() != null && !spec.getRegistry().isEmpty() && spec.getRegistry().equals(registry.getSpec().getServiceName())) {
@@ -122,15 +145,26 @@ public class AppService {
                 }
             }
         } else {
-            logger.error("> Orphan Service: " + registry.getMetadata().getName());
+            logger.error("> Orphan Service: " + registry.getMetadata().getName() + ", it reference this app that doesn't exist: " + registry.getMetadata().getLabels().get("app"));
         }
+        return registry;
     }
 
-    public void addMicroServiceToApp(CustomService microService) {
+    /*
+     * Add MicroService to Application and set up the owner references
+     * @return the modified MicroService resource
+     */
+    public MicroService addMicroServiceToApp(MicroService microService) {
         String appName = microService.getMetadata().getLabels().get("app");
         if (appName != null && !appName.isEmpty()) {
             Application application = apps.get(appName);
             if (application != null) {
+                //Set OwnerReferences: the Application Owns the MicroService
+                List<OwnerReference> ownerReferencesFromApp = createOwnerReferencesFromApp(application);
+                ObjectMeta objectMetaMicroService = new ObjectMeta();
+                objectMetaMicroService.setOwnerReferences(ownerReferencesFromApp);
+                microService.setMetadata(objectMetaMicroService);
+
                 ApplicationSpec spec = application.getSpec();
                 Set<MicroServiceDescr> microservices = spec.getMicroservices();
                 if (microservices == null) {
@@ -147,8 +181,9 @@ public class AppService {
                 }
             }
         } else {
-            logger.error("> Orphan Service: " + microService.getMetadata().getName());
+            logger.error("> Orphan Service: " + microService.getMetadata().getName() + ", it reference this app that doesn't exist: " + microService.getMetadata().getLabels().get("app"));
         }
+        return microService;
     }
 
     public void removeGatewayFromApp(Gateway gateway) {
@@ -199,6 +234,25 @@ public class AppService {
         }
     }
 
+
+    /*
+     * Create owner references for modules of an application
+     */
+    private List<OwnerReference> createOwnerReferencesFromApp(Application app) {
+        if (app.getMetadata().getUid() == null || app.getMetadata().getUid().isEmpty()) {
+            throw new IllegalStateException("The app needs to be saved first, the UUID needs to be present.");
+        }
+        OwnerReference ownerReference = new OwnerReference();
+        ownerReference.setUid(app.getMetadata().getUid());
+        ownerReference.setName(app.getMetadata().getName());
+        ownerReference.setKind(app.getKind());
+        ownerReference.setController(true);
+        ownerReference.setBlockOwnerDeletion(true);
+        ownerReference.setApiVersion(app.getApiVersion());
+
+        return Arrays.asList(ownerReference);
+
+    }
 
     public List<String> getApps() {
         return apps.values().stream()

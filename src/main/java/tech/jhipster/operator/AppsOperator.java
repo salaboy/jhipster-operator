@@ -296,8 +296,10 @@ public class AppsOperator {
         microServicesCRDClient.withResourceVersion(microServicesResourceVersion).watch(new Watcher<MicroService>() {
             @Override
             public void eventReceived(Watcher.Action action, MicroService microService) {
+                //@TODO: check for modified
                 if (action.equals(Action.ADDED)) {
-                    appService.addMicroServiceToApp(microService);
+                    MicroService updatedMicroService = appService.addMicroServiceToApp(microService);
+                    microServicesCRDClient.createOrReplace(updatedMicroService);
                 }
                 if (action.equals(Action.DELETED)) {
                     appService.removeMicroServiceFromApp(microService);
