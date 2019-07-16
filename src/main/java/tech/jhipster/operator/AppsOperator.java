@@ -1,16 +1,22 @@
 package tech.jhipster.operator;
 
 import io.fabric8.kubernetes.api.model.ObjectMeta;
-import io.fabric8.kubernetes.api.model.OwnerReference;
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinition;
 import io.fabric8.kubernetes.api.model.apiextensions.CustomResourceDefinitionList;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import tech.jhipster.operator.app.AppCRDs;
 import tech.jhipster.operator.app.AppService;
 import tech.jhipster.operator.core.K8SCoreRuntime;
-import tech.jhipster.operator.crds.app.*;
+import tech.jhipster.operator.crds.app.Application;
+import tech.jhipster.operator.crds.app.ApplicationList;
+import tech.jhipster.operator.crds.app.DoneableApplication;
 import tech.jhipster.operator.crds.gateway.DoneableGateway;
 import tech.jhipster.operator.crds.gateway.Gateway;
 import tech.jhipster.operator.crds.gateway.GatewayList;
@@ -20,13 +26,8 @@ import tech.jhipster.operator.crds.microservice.MicroServiceList;
 import tech.jhipster.operator.crds.registry.DoneableRegistry;
 import tech.jhipster.operator.crds.registry.Registry;
 import tech.jhipster.operator.crds.registry.RegistryList;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import tech.jhipster.operator.app.AppCRDs;
 
-import java.util.*;
+import java.util.List;
 
 @Service
 public class AppsOperator {
@@ -254,19 +255,22 @@ public class AppsOperator {
                     List<MicroService> microServiceForAppList = microServicesCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
                     if (microServiceForAppList != null && !microServiceForAppList.isEmpty()) {
                         microServiceForAppList.forEach(microService -> {
-                            appService.addMicroServiceToApp(microService);
+                            MicroService updatedMicroService = appService.addMicroServiceToApp(microService);
+                            microServicesCRDClient.createOrReplace(updatedMicroService);
                         });
                     }
                     List<Gateway> gatewayForAppList = gatewaysCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
                     if (gatewayForAppList != null && !gatewayForAppList.isEmpty()) {
                         gatewayForAppList.forEach(gateway -> {
-                            appService.addGatewayToApp(gateway);
+                            Gateway updatedGateway = appService.addGatewayToApp(gateway);
+                            gatewaysCRDClient.createOrReplace(updatedGateway);
                         });
                     }
                     List<Registry> registryForAppList = registriesCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
                     if (registryForAppList != null && !registryForAppList.isEmpty()) {
                         registryForAppList.forEach(registry -> {
-                            appService.addRegistryToApp(registry);
+                            Registry updatedRegistry = appService.addRegistryToApp(registry);
+                            registriesCRDClient.createOrReplace(updatedRegistry);
                         });
                     }
                 }
@@ -325,8 +329,8 @@ public class AppsOperator {
             @Override
             public void eventReceived(Watcher.Action action, Registry registry) {
                 if (action.equals(Action.ADDED)) {
-                    appService.addRegistryToApp(registry);
-
+                    Registry modifiedRegistry = appService.addRegistryToApp(registry);
+                    registriesCRDClient.createOrReplace(modifiedRegistry);
                 }
                 if (action.equals(Action.DELETED)) {
                     appService.removeRegistryFromApp(registry);
@@ -353,7 +357,8 @@ public class AppsOperator {
             @Override
             public void eventReceived(Watcher.Action action, Gateway gateway) {
                 if (action.equals(Action.ADDED)) {
-                    appService.addGatewayToApp(gateway);
+                    Gateway modifiedGateway = appService.addGatewayToApp(gateway);
+                    gatewaysCRDClient.createOrReplace(modifiedGateway);
 
                 }
                 if (action.equals(Action.DELETED)) {

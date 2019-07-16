@@ -42,25 +42,34 @@ public class AppService {
 
         boolean isGatewayAvailable = true; //@TODO: need to implement the validation of structure
         boolean isRegistryAvailable = true; //@TODO: need to implement the validation of structure
-        boolean microServicesAvailable[] = new boolean[app.getSpec().getMicroservices().size()];
+        boolean microServicesAvailable[];
+
+        if( app.getSpec().getMicroservices() != null && !app.getSpec().getMicroservices().isEmpty()){
+            microServicesAvailable = new boolean[app.getSpec().getMicroservices().size()];
+        }else{
+            microServicesAvailable = new boolean[1];
+        }
+
         int microServicesCount = 0;
         //
         Set<MicroServiceDescr> microservices = app.getSpec().getMicroservices();
-
-
+        boolean areMicroServicesAvailable = false;
+        if(microservices != null && !microservices.isEmpty()) {
+            areMicroServicesAvailable = checkMicroServicesAvailability(microservices.size(), microServicesAvailable);
+            if (log) {
+                logger.info("\t> Checking app health: " + app.getMetadata().getName());
+                logger.info("\t\t> MicroServices Available?: " + areMicroServicesAvailable);
+                logger.info("\t\t> Gateway Available?: " + isGatewayAvailable);
+                logger.info("\t\t> Registry Available?: " + isRegistryAvailable);
+            }
+        }
         // The registry is not a microservice in the app def so I need to check separately
         String registry = app.getSpec().getRegistry();
         if (registry != null && !registry.isEmpty()) {
             isRegistryAvailable = k8SCoreRuntime.isServiceAvailable(registry);
         }
 
-        boolean areMicroServicesAvailable = checkMicroServicesAvailability(microservices.size(), microServicesAvailable);
-        if (log) {
-            logger.info("\t> Checking app health: " + app.getMetadata().getName());
-            logger.info("\t\t> MicroServices Available?: " + areMicroServicesAvailable);
-            logger.info("\t\t> Gateway Available?: " + isGatewayAvailable);
-            logger.info("\t\t> Registry Available?: " + isRegistryAvailable);
-        }
+
         if (areMicroServicesAvailable && isGatewayAvailable && isRegistryAvailable) {
             return true;
         }
@@ -91,13 +100,14 @@ public class AppService {
             if (application != null) {
                 //Set OwnerReferences: the Application Owns the Gateway
                 List<OwnerReference> ownerReferencesFromApp = createOwnerReferencesFromApp(application);
-                ObjectMeta objectMetaRegistry = new ObjectMeta();
+                ObjectMeta objectMetaRegistry = gateway.getMetadata();
                 objectMetaRegistry.setOwnerReferences(ownerReferencesFromApp);
                 gateway.setMetadata(objectMetaRegistry);
 
                 ApplicationSpec spec = application.getSpec();
                 //If the APP already have the gateway then ignore, to avoid one API call
                 if (spec.getGateway() != null && !spec.getGateway().isEmpty() && spec.getGateway().equals(gateway.getSpec().getServiceName())) {
+                    //TODO: should I return null?
                     return gateway;
                 }
                 if (k8SCoreRuntime.isServiceAvailable(gateway.getSpec().getServiceName())) {
@@ -126,14 +136,15 @@ public class AppService {
             if (application != null) {
                 //Set OwnerReferences: the Application Owns the Registry
                 List<OwnerReference> ownerReferencesFromApp = createOwnerReferencesFromApp(application);
-                ObjectMeta objectMetaRegistry = new ObjectMeta();
+                ObjectMeta objectMetaRegistry = registry.getMetadata();
                 objectMetaRegistry.setOwnerReferences(ownerReferencesFromApp);
                 registry.setMetadata(objectMetaRegistry);
 
                 ApplicationSpec spec = application.getSpec();
                 //If the APP already have the registry then ignore, to avoid one API call
                 if (spec.getRegistry() != null && !spec.getRegistry().isEmpty() && spec.getRegistry().equals(registry.getSpec().getServiceName())) {
-                    return;
+                    //TODO: should I return null?
+                    return registry;
                 }
                 if (k8SCoreRuntime.isServiceAvailable(registry.getSpec().getServiceName())) {
                     spec.setRegistry(registry.getSpec().getServiceName());
@@ -161,7 +172,7 @@ public class AppService {
             if (application != null) {
                 //Set OwnerReferences: the Application Owns the MicroService
                 List<OwnerReference> ownerReferencesFromApp = createOwnerReferencesFromApp(application);
-                ObjectMeta objectMetaMicroService = new ObjectMeta();
+                ObjectMeta objectMetaMicroService = microService.getMetadata();
                 objectMetaMicroService.setOwnerReferences(ownerReferencesFromApp);
                 microService.setMetadata(objectMetaMicroService);
 
