@@ -5,5 +5,12 @@ metadata:
 spec:
   version: "1.0"
   selector: "my-jhipster-app"
-  gateway: ""
-  registry: ""
+  microservices:
+    - name: invoice
+      serviceName: invoice
+      kind: MicroService
+    - name: review
+      serviceName: review
+      kind: MicroService
+  gateway: "gateway"
+  registry: "registry"

@@ -14,9 +14,7 @@ import org.springframework.stereotype.Service;
 import tech.jhipster.operator.app.AppCRDs;
 import tech.jhipster.operator.app.AppService;
 import tech.jhipster.operator.core.K8SCoreRuntime;
-import tech.jhipster.operator.crds.app.Application;
-import tech.jhipster.operator.crds.app.ApplicationList;
-import tech.jhipster.operator.crds.app.DoneableApplication;
+import tech.jhipster.operator.crds.app.*;
 import tech.jhipster.operator.crds.gateway.DoneableGateway;
 import tech.jhipster.operator.crds.gateway.Gateway;
 import tech.jhipster.operator.crds.gateway.GatewayList;
@@ -28,6 +26,7 @@ import tech.jhipster.operator.crds.registry.Registry;
 import tech.jhipster.operator.crds.registry.RegistryList;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class AppsOperator {
@@ -42,11 +41,7 @@ public class AppsOperator {
     private CustomResourceDefinition gatewayCRD = null;
     private CustomResourceDefinition registryCRD = null;
     private CustomResourceDefinition applicationCRD = null;
-    private boolean microServiceWatchRegistered = false;
-    private boolean gatewayWatchRegistered = false;
-    private boolean registryWatchRegistered = false;
     private boolean applicationWatchRegistered = false;
-
     private String appsResourceVersion;
     private String microServicesResourceVersion;
     private String registriesResourceVersion;
@@ -60,6 +55,9 @@ public class AppsOperator {
 
     @Autowired
     private AppService appService;
+
+    @Autowired
+    private JHipsterOperatorConfiguration config;
 
     @Autowired
     private K8SCoreRuntime k8SCoreRuntime;
@@ -76,10 +74,7 @@ public class AppsOperator {
      */
     private boolean areRequiredCRDsPresent() {
         try {
-            k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "MicroService", MicroService.class);
-            k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "Gateway", Gateway.class);
-            k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "Registry", Registry.class);
-            k8SCoreRuntime.registerCustomKind(AppCRDs.APP_CRD_GROUP + "/v1", "Application", Application.class);
+            appService.registerCustomResourcesForRuntime();
 
             CustomResourceDefinitionList crds = k8SCoreRuntime.getCustomResourceDefinitionList();
             for (CustomResourceDefinition crd : crds.getItems()) {
@@ -159,19 +154,10 @@ public class AppsOperator {
      */
     private boolean watchOurCRDs() {
         // Watch for our CRDs
-        if (!microServiceWatchRegistered) {
-            registerMicroServiceWatch();
-        }
-        if (!registryWatchRegistered) {
-            registerRegistryWatch();
-        }
-        if (!gatewayWatchRegistered) {
-            registerGatewayWatch();
-        }
         if (!applicationWatchRegistered) {
             registerApplicationWatch();
         }
-        if (areAllCRDWatchesRegistered()) {
+        if (applicationWatchRegistered) {
             logger.info("> All CRDs Found, init complete");
             return true;
         } else {
@@ -203,7 +189,9 @@ public class AppsOperator {
             microServicesResourceVersion = microServiceList.get(0).getMetadata().getResourceVersion();
             logger.info(">> MicroService Resource Version: " + microServicesResourceVersion);
             microServiceList.forEach(microService -> {
-                appService.addMicroServiceToApp(microService);
+                // If it doesn't have owner references we need to set it up at load time
+                MicroService updatedMicroService = checkAndAddOwnerReferences(microService);
+                microServicesCRDClient.createOrReplace(updatedMicroService);
             });
         }
         // Load Existing Gateways
@@ -212,7 +200,10 @@ public class AppsOperator {
             gatewaysResourceVersion = gatewayList.get(0).getMetadata().getResourceVersion();
             logger.info(">> Gateway Resource Version: " + gatewaysResourceVersion);
             gatewayList.forEach(gateway -> {
-                appService.addGatewayToApp(gateway);
+                // If it doesn't have owner references we need to set it up at load time
+                Gateway updatedGateway = checkAndAddOwnerReferences(gateway);
+                gatewaysCRDClient.createOrReplace(updatedGateway);
+
             });
 
         }
@@ -222,7 +213,9 @@ public class AppsOperator {
             registriesResourceVersion = registriesList.get(0).getMetadata().getResourceVersion();
             logger.info(">> Registry Resource Version: " + registriesResourceVersion);
             registriesList.forEach(registry -> {
-                appService.addRegistryToApp(registry);
+                // If it doesn't have owner references we need to set it up at load time
+                Registry updatedRegistry = checkAndAddOwnerReferences(registry);
+                registriesCRDClient.createOrReplace(updatedRegistry);
             });
 
         }
@@ -230,15 +223,17 @@ public class AppsOperator {
     }
 
 
-    /*
-     * Check that all the CRDs are being watched for changes
-     */
-    private boolean areAllCRDWatchesRegistered() {
-        if (applicationWatchRegistered && microServiceWatchRegistered && gatewayWatchRegistered && registryWatchRegistered) {
-            return true;
+    private <T extends CustomService> T checkAndAddOwnerReferences(T service) {
+        if (service.getMetadata().getOwnerReferences() != null) {
+            String appName = service.getMetadata().getLabels().get("app");
+            if (appName != null && !appName.isEmpty()) {
+                Application application = appService.getApp(appName);
+                return appService.owns(application, service);
+            }
         }
-        return false;
+        return service;
     }
+
 
     /*
      * Register an Application Resource Watch
@@ -252,31 +247,18 @@ public class AppsOperator {
                 if (action.equals(Action.ADDED)) {
                     logger.info(">> Adding App: " + application.getMetadata().getName());
                     appService.addApp(application.getMetadata().getName(), application);
-                    List<MicroService> microServiceForAppList = microServicesCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
-                    if (microServiceForAppList != null && !microServiceForAppList.isEmpty()) {
-                        microServiceForAppList.forEach(microService -> {
-                            MicroService updatedMicroService = appService.addMicroServiceToApp(microService);
-                            microServicesCRDClient.createOrReplace(updatedMicroService);
-                        });
-                    }
-                    List<Gateway> gatewayForAppList = gatewaysCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
-                    if (gatewayForAppList != null && !gatewayForAppList.isEmpty()) {
-                        gatewayForAppList.forEach(gateway -> {
-                            Gateway updatedGateway = appService.addGatewayToApp(gateway);
-                            gatewaysCRDClient.createOrReplace(updatedGateway);
-                        });
-                    }
-                    List<Registry> registryForAppList = registriesCRDClient.withLabel("app", application.getMetadata().getName()).list().getItems();
-                    if (registryForAppList != null && !registryForAppList.isEmpty()) {
-                        registryForAppList.forEach(registry -> {
-                            Registry updatedRegistry = appService.addRegistryToApp(registry);
-                            registriesCRDClient.createOrReplace(updatedRegistry);
-                        });
-                    }
+
+                    linkAllApplicationResources(application);
+
                 }
                 if (action.equals(Action.DELETED)) {
                     logger.info(">> Deleting App: " + application.getMetadata().getName());
                     appService.removeApp(application.getMetadata().getName());
+                }
+                if (action.equals(Action.MODIFIED)) {
+                    logger.info(">> Modifying App: " + application.getMetadata().getName());
+                    appService.addApp(application.getMetadata().getName(), application);
+                    linkAllApplicationResources(application);
                 }
 
                 if (application.getSpec() == null) {
@@ -292,90 +274,74 @@ public class AppsOperator {
 
     }
 
-    /*
-     * Register a MicroService Resource Watch
-     */
-    private void registerMicroServiceWatch() {
-        logger.info("> Registering MicroService CRD Watch");
-        microServicesCRDClient.withResourceVersion(microServicesResourceVersion).watch(new Watcher<MicroService>() {
-            @Override
-            public void eventReceived(Watcher.Action action, MicroService microService) {
-                //@TODO: check for modified
-                if (action.equals(Action.ADDED)) {
-                    MicroService updatedMicroService = appService.addMicroServiceToApp(microService);
-                    microServicesCRDClient.createOrReplace(updatedMicroService);
-                }
-                if (action.equals(Action.DELETED)) {
-                    appService.removeMicroServiceFromApp(microService);
-                }
-                if (microService.getSpec() == null) {
-                    logger.error("No Spec for resource " + microService);
-                }
-            }
+    private void linkAllApplicationResources(Application application) {
+        linkMicroServicesToApp(application);
 
-            @Override
-            public void onClose(KubernetesClientException cause) {
-            }
-        });
-        microServiceWatchRegistered = true;
+        linkRegistryToApp(application);
+
+        linkGatewayToApp(application);
     }
 
-    /*
-     * Register a Registry Resource Watch
-     */
-    private void registerRegistryWatch() {
-        logger.info("> Registering Registry CRD Watch");
-        registriesCRDClient.withResourceVersion(registriesResourceVersion).watch(new Watcher<Registry>() {
-            @Override
-            public void eventReceived(Watcher.Action action, Registry registry) {
-                if (action.equals(Action.ADDED)) {
-                    Registry modifiedRegistry = appService.addRegistryToApp(registry);
-                    registriesCRDClient.createOrReplace(modifiedRegistry);
-                }
-                if (action.equals(Action.DELETED)) {
-                    appService.removeRegistryFromApp(registry);
-
-                }
-                if (registry.getSpec() == null) {
-                    logger.error("No Spec for resource " + registry);
-                }
+    private void linkGatewayToApp(Application application) {
+        String gatewayName = application.getSpec().getGateway();
+        Gateway gateway = gatewaysCRDClient.withName(gatewayName).get();
+        if (gateway != null) {
+            if (gateway.getMetadata().getLabels().get("app") != null &&
+                    gateway.getMetadata().getLabels().get("app").equals(application.getMetadata().getName())) {
+                // This just set the Application as the Owner of the Gateway
+                Gateway updatedGateway = appService.owns(application, gateway);
+                gatewaysCRDClient.createOrReplace(updatedGateway);
+            } else {
+                logger.info("This gateway (" + gateway + ") belongs to a different application"
+                        + gateway.getMetadata().getLabels().get("app"));
             }
-
-            @Override
-            public void onClose(KubernetesClientException cause) {
-            }
-        });
-        registryWatchRegistered = true;
+        } else {
+            logger.error("Gateway: " + gatewayName + " doesn't exist!");
+        }
     }
 
-    /*
-     * Register a Gateway Resource Watch
-     */
-    private void registerGatewayWatch() {
-        logger.info("> Registering Gateway CRD Watch");
-        gatewaysCRDClient.withResourceVersion(gatewaysResourceVersion).watch(new Watcher<Gateway>() {
-            @Override
-            public void eventReceived(Watcher.Action action, Gateway gateway) {
-                if (action.equals(Action.ADDED)) {
-                    Gateway modifiedGateway = appService.addGatewayToApp(gateway);
-                    gatewaysCRDClient.createOrReplace(modifiedGateway);
-
-                }
-                if (action.equals(Action.DELETED)) {
-                    appService.removeGatewayFromApp(gateway);
-
-                }
-                if (gateway.getSpec() == null) {
-                    logger.error("No Spec for resource " + gateway);
-                }
+    private void linkRegistryToApp(Application application) {
+        String registryName = application.getSpec().getRegistry();
+        Registry registry = registriesCRDClient.withName(registryName).get();
+        if (registry != null) {
+            if (registry.getMetadata().getLabels().get("app") != null &&
+                    registry.getMetadata().getLabels().get("app").equals(application.getMetadata().getName())) {
+                // This just set the Application as the Owner of the Registry
+                Registry updatedRegistry = appService.owns(application, registry);
+                registriesCRDClient.createOrReplace(updatedRegistry);
+            } else {
+                logger.info("This registry (" + registry + ") belongs to a different application"
+                        + registry.getMetadata().getLabels().get("app"));
             }
+        } else {
+            logger.error("Registry: " + registryName + " doesn't exist!");
+        }
 
-            @Override
-            public void onClose(KubernetesClientException cause) {
-            }
-        });
-        gatewayWatchRegistered = true;
     }
+
+    private void linkMicroServicesToApp(Application application) {
+        Set<MicroServiceDescr> microservices = application.getSpec().getMicroservices();
+        if (microservices != null && !microservices.isEmpty()) {
+            for (MicroServiceDescr msd : microservices) {
+                MicroService microService = microServicesCRDClient.withName(msd.getName()).get();
+                if (microService != null) {
+                    if (microService.getMetadata().getLabels().get("app") != null &&
+                            microService.getMetadata().getLabels().get("app").equals(application.getMetadata().getName())) {
+                        // This just set the Application as the Owner of the MicroService
+                        MicroService updatedMicroService = appService.owns(application, microService);
+                        microServicesCRDClient.createOrReplace(updatedMicroService);
+                    } else {
+                        logger.debug("This microservice (" + microService + ") belongs to a different application"
+                                + microService.getMetadata().getLabels().get("app"));
+                    }
+                } else {
+                    logger.error("MicroService: " + msd.getName() + " doesn't exist!");
+                }
+
+            }
+        }
+    }
+
 
     /*
      * Reconcile contains the logic that understand how services relates to applications and the application state
@@ -389,72 +355,94 @@ public class AppsOperator {
         appService.getAppsMap().keySet().forEach(appName ->
                 {
                     Application app = appService.getApp(appName);
+                    linkAllApplicationResources(app);
                     logger.info("> App Found: " + appName + ". Scanning ...");
-                    // Is the APP Healthy??
-                    if (appService.isAppHealthy(app, true)) {
-                        // YES: Change the state and provide a URL
-                        app.getSpec().getMicroservices().forEach(m -> logger.info("\t> MicroService found: " + m));
-                        app.getSpec().setStatus("HEALTHY");
-                        String externalIp = k8SCoreRuntime.findExternalIP();
-                        String url = "http://" + externalIp + "/apps/" + app.getMetadata().getName() + "/" + app.getSpec().getVersion() + "/";
-                        appService.addAppUrl(app.getMetadata().getName(), url);
-                        app.getSpec().setUrl(url);
-                        logger.info("\t> App: " + appName + ", status:  HEALTHY, URL: " + url + " \n");
-                    } else {
-                        // NO: Change the state and remove the URL
-                        logger.error("\t > App Name: " + appName + " is down due missing services");
-                        if (app.getSpec().getMicroservices() == null || app.getSpec().getMicroservices().isEmpty()) {
-                            logger.info("\t>App: " + appName + ": No MicroService found. ");
+                    // Is App Structure ok
+                    if (isApplicationStructureOK(app)) {
+
+                        // Is the APP Healthy??
+                        boolean appHealthy = false;
+                        if (config.isK8sServiceCheckEnabled()) {
+                            appHealthy = appService.isAppHealthy(app, true);
                         } else {
-                            app.getSpec().getMicroservices().forEach(m -> logger.info("\t> MicroService found: " + m));
+                            // If we have K8s services disabled and the structure is ok we will set it as healthy
+                            appHealthy = true;
                         }
-                        app.getSpec().setStatus("UNHEALTHY");
-                        app.getSpec().setUrl("N/A");
-                        logger.info("\t> App: " + appName + ", status: UNHEALTHY. \n ");
+                        if (appHealthy) {
+                            // YES: Change the state and provide a URL
+                            app.getSpec().getMicroservices().forEach(m -> logger.info("\t> MicroService found: " + m));
+                            app.getSpec().setStatus("HEALTHY");
+                            String url = appService.createAndSetAppURL(app.getMetadata().getName(), app.getSpec().getVersion());
+                            app.getSpec().setUrl(url);
+                            logger.info("\t> App: " + appName + ", status:  HEALTHY, URL: " + url + " \n");
+                        } else {
+                            // NO: Change the state and remove the URL
+                            logger.error("\t > App Name: " + appName + " is down due missing services");
+                            if (app.getSpec().getMicroservices() == null || app.getSpec().getMicroservices().isEmpty()) {
+                                logger.info("\t>App: " + appName + ": No MicroService found. ");
+                            } else {
+                                app.getSpec().getMicroservices().forEach(m -> logger.info("\t> MicroService found: " + m));
+                            }
+                            app.getSpec().setStatus("UNHEALTHY");
+                            app.getSpec().setUrl("N/A");
+                            logger.info("\t> App: " + appName + ", status: UNHEALTHY. \n ");
+                        }
+                        // Notify K8s about the updates required
+                        appCRDClient.createOrReplace(app);
+                    } else {
+                        logger.error("The application " + app.getMetadata().getName() + " structure is not complete please check the resources required by this application");
                     }
-                    // Notify K8s about the updates required
-                    appCRDClient.createOrReplace(app);
                 }
         );
 
     }
 
-//    // Lifecycle Management methods
-//    // @TODO: maybe move all these lifecycle management methods out of the operator to a delegate
-//
-//    /*
-//     * Create a new JHipster App with all its resources based on a JHipsterApplicationDefinition
-//     *  Which is usually generated based on a JDL definition
-//     */
-//
-//    public void newApp(JHipsterApplicationDefinition appDefinition) {
-//        Application app = createNewApplicationFromDef(appDefinition);
-//
-//        // Creating the Root Resource: JHipster App
-//        Application storedApp = appCRDClient.create(app);
-//
-//        List<OwnerReference> ownerReferences = createOwnerReferencesFromApp(storedApp);
-//
-//        Map<String, String> labels = Map.of("app", appDefinition.getName());
-//
-//        // Create Registry Resource
-//        Registry registry = createRegistryForApp(labels, ownerReferences);
-//
-//        registriesCRDClient.create(registry);
-//
-//        // Create Modules Resources
-//        appDefinition.getModules().forEach(md -> {
-//                    if (JDLParser.fromJDLServiceToKind(md.getType()).equals("Gateway")) {
-//                        Gateway gateway = createGatewayForApp(md, labels, ownerReferences);
-//                        gatewaysCRDClient.create(gateway);
-//                    } else {
-//                        MicroService microService = createMicroServiceForApp(md, labels, ownerReferences);
-//                        microServicesCRDClient.create(microService);
-//                    }
-//                }
-//        );
-//
-//    }
+    private boolean isApplicationStructureOK(Application application) {
+
+        boolean isRegistryDefAvailable = false;
+        boolean isGatewayDefAvailable = false;
+        boolean areMicroServicesAvailable = false;
+
+        Set<MicroServiceDescr> microservices = application.getSpec().getMicroservices();
+        if (microservices != null && !microservices.isEmpty()) {
+            boolean areMicroServicesDefAvailable[] = new boolean[microservices.size()];
+            int microservicesCount = 0;
+            for (MicroServiceDescr msd : microservices) {
+                MicroService microService = microServicesCRDClient.withName(msd.getName()).get();
+                if (microService != null) {
+                    areMicroServicesDefAvailable[microservicesCount] = true;
+                } else {
+                    logger.info("MicroService " + msd.getName() + " not found!");
+                }
+                microservicesCount++;
+            }
+            areMicroServicesAvailable = appService.checkMicroServicesAvailability(microservices.size(), areMicroServicesDefAvailable);
+        }
+
+        String registryName = application.getSpec().getRegistry();
+        Registry registry = registriesCRDClient.withName(registryName).get();
+        if (registry != null) {
+            isRegistryDefAvailable = true;
+        } else {
+            logger.info("Registry " + registryName + " not found!");
+        }
+
+        String gatewayName = application.getSpec().getGateway();
+        Gateway gateway = gatewaysCRDClient.withName(gatewayName).get();
+        if (gateway != null) {
+            isGatewayDefAvailable = true;
+        } else {
+            logger.info("Gateway " + gatewayName + " not found!");
+        }
+
+        if (areMicroServicesAvailable && isGatewayDefAvailable && isRegistryDefAvailable) {
+            return true;
+        }
+
+
+        return false;
+    }
+
 
     /*
      * Delete a JHipster Application by name
@@ -464,108 +452,6 @@ public class AppsOperator {
         //@TODO: delete by API doesn't cascade yet..
         appCRDClient.delete(app);
     }
-
-
-//    /*
-//     * Create an Application Resource (based on a Application CRD)
-//     */
-//    private Application createNewApplicationFromDef(JHipsterApplicationDefinition appDefinition) {
-//        Application app = new Application();
-//        ObjectMeta objectMeta = new ObjectMeta();
-//        objectMeta.setName(appDefinition.getName());
-//        objectMeta.setAdditionalProperty("jdl", appDefinition.getJDLContent());
-//        objectMeta.setFinalizers(Arrays.asList("foregroundDeletion"));
-//        app.setMetadata(objectMeta);
-//        ApplicationSpec spec = new ApplicationSpec();
-//        spec.setAppDefinition(appDefinition);
-//        spec.setVersion(appDefinition.getVersion());
-//        app.setSpec(spec);
-//        return app;
-//    }
-//
-//    /*
-//     * Create owner references for modules of an application
-//     */
-//    private List<OwnerReference> createOwnerReferencesFromApp(Application app) {
-//        if (app.getMetadata().getUid() == null || app.getMetadata().getUid().isEmpty()) {
-//            throw new IllegalStateException("The app needs to be saved first, the UUID needs to be present.");
-//        }
-//        OwnerReference ownerReference = new OwnerReference();
-//        ownerReference.setUid(app.getMetadata().getUid());
-//        ownerReference.setName(app.getMetadata().getName());
-//        ownerReference.setKind(app.getKind());
-//        ownerReference.setController(true);
-//        ownerReference.setBlockOwnerDeletion(true);
-//        ownerReference.setApiVersion(app.getApiVersion());
-//
-//        return Arrays.asList(ownerReference);
-//
-//    }
-//
-//    /*
-//     * Create a registry module for an application, apply the labels and the owner references
-//     */
-//    private Registry createRegistryForApp(Map<String, String> labels, List<OwnerReference> ownerReferences) {
-//        // By default I will create a Registry to make the App Complete
-//        Registry registry = new Registry();
-//        ObjectMeta objectMetaRegistry = new ObjectMeta();
-//        objectMetaRegistry.setName("jhipster-registry");
-//        objectMetaRegistry.setOwnerReferences(ownerReferences);
-//        objectMetaRegistry.setFinalizers(Arrays.asList("foregroundDeletion"));
-//        objectMetaRegistry.setLabels(labels);
-//        registry.setMetadata(objectMetaRegistry);
-//        ServiceSpec registrySpec = new ServiceSpec();
-//        registrySpec.setServiceName("jhipster-registry");
-//        registrySpec.setServiceVersion("1.0");
-//        registrySpec.setServicePort("8761"); //hardcoded in jhipster k8s scripts and yamls
-//        registry.setSpec(registrySpec);
-//
-//        return registry;
-//    }
-//
-//    /*
-//     * Create a gateway module for an application, apply the labels and the owner references
-//     */
-//    private Gateway createGatewayForApp(JHipsterModuleDefinition md, Map<String, String> labels, List<OwnerReference> ownerReferences) {
-//        Gateway gateway = new Gateway();
-//        ObjectMeta objectMetaGateway = new ObjectMeta();
-//        objectMetaGateway.setName(md.getName());
-//        objectMetaGateway.setOwnerReferences(ownerReferences);
-//        objectMetaGateway.setFinalizers(Arrays.asList("foregroundDeletion"));
-//        objectMetaGateway.setLabels(labels);
-//        gateway.setMetadata(objectMetaGateway);
-//        ServiceSpec gatewaySpec = new ServiceSpec();
-//        gatewaySpec.setServiceName(md.getName());
-//        gatewaySpec.setServiceVersion("1.0");
-//        if (md.getPort() == null || md.getPort().isEmpty()) {
-//            gatewaySpec.setServicePort("8080");
-//        } else {
-//            gatewaySpec.setServicePort(md.getPort());
-//        }
-//        gateway.setSpec(gatewaySpec);
-//        return gateway;
-//    }
-//
-//    /*
-//     * Create a microservice module for an application, apply the labels and the owner references
-//     */
-//    private MicroService createMicroServiceForApp(JHipsterModuleDefinition md, Map<String, String> labels, List<OwnerReference> ownerReferences) {
-//        MicroService microService = new MicroService();
-//        ObjectMeta objectMetaMicroService = new ObjectMeta();
-//        objectMetaMicroService.setName(md.getName());
-//
-//        objectMetaMicroService.setOwnerReferences(ownerReferences);
-//        objectMetaMicroService.setLabels(labels);
-//        objectMetaMicroService.setFinalizers(Arrays.asList("foregroundDeletion"));
-//        microService.setMetadata(objectMetaMicroService);
-//
-//        ServiceSpec serviceSpec = new ServiceSpec();
-//        serviceSpec.setServiceName(md.getName());
-//        serviceSpec.setServiceVersion("1.0");
-//        serviceSpec.setServicePort(md.getPort());
-//        microService.setSpec(serviceSpec);
-//        return microService;
-//    }
 
     public CustomResourceDefinition getMicroServiceCRD() {
         return microServiceCRD;
